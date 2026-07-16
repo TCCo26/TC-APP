@@ -1,7 +1,7 @@
 // Minimal service worker: caches the app shell so the dashboard is
 // installable and still opens (against cached data) without a network.
-const CACHE = 'qp-dashboard-v1';
-const SHELL = ['./', './index.html', './manifest.json', './icon.svg'];
+const CACHE = 'qp-dashboard-v2';
+const SHELL = ['./', './index.html', './manifest.json', './icon-192.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));
@@ -39,7 +39,7 @@ self.addEventListener('push', (e) => {
     self.registration.showNotification(data.title, {
       body: data.body,
       tag: data.tag,
-      icon: './icon.svg',
+      icon: './icon-192.png',
     })
   );
 });

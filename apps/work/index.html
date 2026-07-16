@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Qualitech Philippines — Morning Dashboard</title>
 <link rel="manifest" href="manifest.json">
-<link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icon.svg">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="theme-color" content="#1B3A6B">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="QP Dashboard">
@@ -1368,7 +1368,7 @@ const KPI_META = {
   p1:      { title: 'Due today',                     filter: t => !t.done && t.date === fmtDate(new Date()) },
   overdue: { title: 'Overdue — P1',                  filter: t => !t.done && effectivePriority(t) === 'p1' },
   open:    { title: 'In progress — all open items',  filter: t => !t.done },
-  done:    { title: 'Done today',                    filter: t => t.done },
+  done:    { title: 'Done today',                    filter: t => t.done && t.completedAt === fmtDate(new Date()) },
 };
 
 const DEFAULT_TASKS = {
@@ -1435,6 +1435,7 @@ function normalizeTask(t) {
   if (t.date === undefined) t.date = '';
   if (t.status === undefined) t.status = t.done ? 'done' : 'not-started';
   if (t.link === undefined) t.link = '';
+  if (t.completedAt === undefined) t.completedAt = t.done ? '' : null;
   return t;
 }
 
@@ -1513,7 +1514,7 @@ function computeKpis() {
   DESKS.forEach(d => {
     const tasks = state.desks[d.id] || [];
     tasks.forEach(t => {
-      if (t.done) { done++; return; }
+      if (t.done) { if (t.completedAt === today) done++; return; }
       if (t.date === today) dueToday++;
       if (effectivePriority(t) === 'p1') overdue++;
       open++;
@@ -1999,7 +2000,8 @@ function renderDeskMain() {
   const desk = DESKS.find(d => d.id === activeView);
   const tasks = state.desks[activeView] || [];
   const open = tasks.filter(t => !t.done);
-  const done = tasks.filter(t => t.done);
+  const done = tasks.filter(t => t.done)
+    .sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || ''));
 
   const openByP = {
     p1: open.filter(t => effectivePriority(t) === 'p1'),
@@ -2101,6 +2103,7 @@ function taskCardHTML(t) {
             <button class="notes-toggle" onclick="toggleLink('${t.id}')">
               ${t.link ? '✎ Edit link' : '+ Link'}
             </button>
+            ${t.done ? `<span style="font-size:11px;color:var(--muted);margin-left:auto">✓ Completed ${t.completedAt ? fmtDisplayDate(t.completedAt) : '(before this was tracked)'}</span>` : ''}
           </div>
         </div>
         <div class="task-controls">
@@ -2137,6 +2140,14 @@ function allTasksFlat() {
 function fmtDate(dt) {
   const y = dt.getFullYear(), m = String(dt.getMonth()+1).padStart(2,'0'), d = String(dt.getDate()).padStart(2,'0');
   return `${y}-${m}-${d}`;
+}
+
+// "2026-07-14" -> "Jul 14" (or "Jul 14, 2025" if not this year).
+function fmtDisplayDate(isoDate) {
+  const d = new Date(isoDate + 'T00:00:00');
+  const now = new Date();
+  const base = `${MONTH_NAMES[d.getMonth()].slice(0,3)} ${d.getDate()}`;
+  return d.getFullYear() === now.getFullYear() ? base : `${base}, ${d.getFullYear()}`;
 }
 
 function eventsForDate(dateStr) {
@@ -2880,7 +2891,12 @@ function findTask(id) {
 
 function toggleDone(id) {
   const t = findTask(id);
-  if (t) { t.done = !t.done; t.status = t.done ? 'done' : (t.status === 'done' ? 'not-started' : t.status); saveState(); renderAll(); }
+  if (t) {
+    t.done = !t.done;
+    t.status = t.done ? 'done' : (t.status === 'done' ? 'not-started' : t.status);
+    t.completedAt = t.done ? fmtDate(new Date()) : null;
+    saveState(); renderAll();
+  }
 }
 
 function updateTaskPriority(id, priority) {
@@ -2892,8 +2908,8 @@ function cycleStatus(id) {
   const t = findTask(id);
   if (t) {
     t.status = STATUS_CYCLE[t.status] || 'not-started';
-    if (t.status === 'done') t.done = true;
-    else if (t.done) t.done = false;
+    if (t.status === 'done') { t.done = true; t.completedAt = fmtDate(new Date()); }
+    else if (t.done) { t.done = false; t.completedAt = null; }
     saveState(); renderAll();
   }
 }
@@ -3268,7 +3284,7 @@ function notifActive() {
 function sendNotification(title, body, tag) {
   if (!notifActive()) return;
   try {
-    const n = new Notification(title, { body, tag, icon: 'icon.svg' });
+    const n = new Notification(title, { body, tag, icon: 'icon-192.png' });
     n.onclick = () => { window.focus(); n.close(); };
   } catch (e) {}
 }
