@@ -1,8 +1,8 @@
 {
   "work": {
-    "apiBase": ""
+    "apiBase": "https://morning-dashboard-kohl.vercel.app"
   },
   "personal": {
-    "apiBase": ""
+    "apiBase": "https://jm-1-dashboard.vercel.app"
   }
 }
