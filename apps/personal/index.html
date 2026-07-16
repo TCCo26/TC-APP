@@ -269,6 +269,40 @@
   .g3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; }
   .g4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
 
+  /* Portfolio's tiles read as cramped at the default gap/margins — more
+     breathing room here specifically, rather than changing .g2/.g3/.g4 for
+     every other page that also uses them. */
+  #page-portfolio .g2, #page-portfolio .g3, #page-portfolio .g4 { gap: 14px; }
+  #page-portfolio .sl { margin-top: 22px; margin-bottom: 10px; }
+  #page-portfolio .stat-card { padding: 1.05rem 1.15rem; }
+
+  /* ── Calendar tile grid ── */
+  .cal-nav { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .cal-nav-label { font-size: 14px; font-weight: 600; color: var(--text); min-width: 140px; text-align: center; }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .cal-dow { font-size: 10px; font-weight: 600; color: var(--text3); text-align: center; padding: 4px 0; text-transform: uppercase; }
+  .cal-cell {
+    background: var(--bg2); border-radius: var(--radius-sm); box-shadow: var(--shadow-sm);
+    aspect-ratio: 1; padding: 6px; cursor: pointer; overflow: hidden;
+    display: flex; flex-direction: column; gap: 3px; transition: box-shadow .13s;
+  }
+  .cal-cell:hover { box-shadow: 0 0 0 1.5px var(--border) inset, var(--shadow-sm); }
+  .cal-cell-empty { background: transparent; box-shadow: none; cursor: default; }
+  .cal-cell-today .cal-cell-num { color: var(--purple); font-weight: 700; }
+  .cal-cell-sel { box-shadow: 0 0 0 1.5px var(--purple) inset, var(--shadow-sm); }
+  .cal-cell-num { font-size: 11px; color: var(--text2); flex-shrink: 0; }
+  .cal-cell-events { display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
+  .cal-chip {
+    font-size: 9px; color: var(--text2); background: var(--bg3); border-radius: 4px;
+    padding: 1px 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .cal-chip-more { color: var(--text3); background: transparent; padding-left: 0; }
+  @media (max-width: 768px) {
+    .cal-cell { padding: 4px; }
+    .cal-cell-num { font-size: 10px; }
+    .cal-chip { font-size: 8px; }
+  }
+
   /* ── Stat cards ── */
   .stat-card { background: var(--bg2); box-shadow: var(--shadow-sm); border-radius: var(--radius); padding: .9rem 1.05rem; }
   .stat-val { font-size: 28px; font-weight: 800; color: var(--text); font-family: 'Bricolage Grotesque', sans-serif; font-style: normal; }
@@ -455,11 +489,14 @@
   .add-row input, .add-row select {
     flex: 1; font-size: 12px; padding: 8px 10px;
     border-radius: var(--radius-sm);
-    border: none;
+    border: 1px solid var(--border);
     background: var(--bg3); color: var(--text);
     font-family: inherit; outline: none;
     transition: background .13s;
   }
+  /* In light theme --bg3 is nearly identical to the page's own --bg, so an
+     input sitting directly on the page (not inside a white --bg2 card) has
+     no visible boundary without this border — it just disappears. */
   .add-row input:focus, .add-row select:focus { background: var(--bg4); }
   .add-row select option { background: var(--bg2); color: var(--text); }
   .add-row button, .btn {
@@ -545,7 +582,7 @@
   .lock-sub { font-size: 12px; color: var(--text3); margin-bottom: 18px; }
   .lock-input {
     width: 100%; font-size: 14px; padding: 10px 12px; margin-bottom: 10px;
-    border-radius: var(--radius-sm); border: none;
+    border-radius: var(--radius-sm); border: 1px solid var(--border);
     background: var(--bg3); color: var(--text); font-family: inherit; outline: none;
   }
   .lock-input:focus { background: var(--bg4); }
@@ -994,6 +1031,13 @@
       <p>Master's degree roadmap — one per life phase.</p>
     </div>
     <div id="edu-cards"></div>
+
+    <div class="sl">Self-study topics — outside any fixed program</div>
+    <div id="study-topics"></div>
+    <div class="add-row">
+      <input id="topic-title-inp" type="text" placeholder="Topic to study (e.g. Behavioral economics)">
+      <button onclick="addStudyTopic()"><i class="ti ti-plus"></i> Add topic</button>
+    </div>
   </div>
 
   <!-- WELLNESS -->
@@ -1137,9 +1181,9 @@
   <div class="page" id="page-calendar">
     <div class="page-header">
       <h1>Calendar</h1>
-      <p>Agenda view of a connected Google Calendar. Read-only — edit events in Google Calendar itself.</p>
+      <p>Tile view of a connected Google Calendar. Read-only — edit events in Google Calendar itself.</p>
     </div>
-    <div class="sl">Upcoming — <span id="calendar-status" class="f11 tc"></span></div>
+    <div class="sl">Connected calendar — <span id="calendar-status" class="f11 tc"></span></div>
     <div id="calendar-body"></div>
   </div>
 
@@ -1185,8 +1229,21 @@
       <h1>Financial portfolio</h1>
       <p>Track holdings, cost basis, and performance. Manual entry by default — add a free Finnhub key in Settings to refresh live prices.</p>
     </div>
-    <div class="g4" id="portfolio-stats"></div>
+
+    <div class="sl">Overview</div>
+    <div class="g4" id="portfolio-overview-stats"></div>
+    <div class="g2" style="margin-top:8px">
+      <div class="card">
+        <div class="f11 tc" style="margin-bottom:4px;text-align:center">Value over time</div>
+        <div id="portfolio-chart"></div>
+      </div>
+      <div class="card">
+        <div id="expense-chart"></div>
+      </div>
+    </div>
+
     <div class="sl">Holdings</div>
+    <div class="g4" id="portfolio-stats"></div>
     <div id="portfolio-rows"></div>
     <div class="add-row">
       <input id="pf-ticker-inp" type="text" placeholder="Ticker (e.g. AAPL)" style="max-width:110px">
@@ -1197,10 +1254,6 @@
       <button onclick="addPortfolio()"><i class="ti ti-plus"></i> Add</button>
     </div>
     <button class="btn" onclick="refreshPrices()" style="margin-top:10px">Refresh live prices</button>
-    <div class="sl">Value over time — snapshots on each visit</div>
-    <div class="card">
-      <div id="portfolio-chart"></div>
-    </div>
 
     <div class="sl">Savings — goal projects</div>
     <div class="g4" id="savings-stats"></div>
@@ -1212,11 +1265,26 @@
       <button onclick="addSavingsGoal()"><i class="ti ti-plus"></i> Add project</button>
     </div>
 
+    <div class="sl">Expense Budget</div>
+    <div class="g4" id="budget-stats"></div>
+    <div id="budget-deposits"></div>
+    <div class="add-row">
+      <input id="budget-amount-inp" type="number" placeholder="Deposit amount (₱)" style="max-width:130px">
+      <input id="budget-note-inp" type="text" placeholder="Note (optional, e.g. Salary)">
+      <button onclick="addBudgetDeposit()"><i class="ti ti-plus"></i> Log deposit</button>
+    </div>
+
+    <div class="sl">Priority expenses — not yet paid</div>
+    <div id="priority-expense-rows"></div>
+    <div class="add-row">
+      <input id="pe-title-inp" type="text" placeholder="What's owed (e.g. Rent)">
+      <input id="pe-amount-inp" type="number" placeholder="Amount (₱)" style="max-width:110px">
+      <input id="pe-due-inp" type="date" style="max-width:150px">
+      <button onclick="addPriorityExpense()"><i class="ti ti-plus"></i> Add</button>
+    </div>
+
     <div class="sl">Expense log — where your money is going</div>
     <div class="g4" id="expense-stats"></div>
-    <div class="card">
-      <div id="expense-chart"></div>
-    </div>
     <div class="add-row" style="margin-top:0"><input id="expense-search-inp" type="text" placeholder="Search expenses…"></div>
     <div id="expense-rows"></div>
     <div class="add-row">
@@ -1268,10 +1336,12 @@
       <h1>Shopping list</h1>
       <p>Click to mark picked up, click text to edit.</p>
     </div>
+    <div id="shopping-total" class="f11 tc" style="margin-bottom:8px"></div>
     <div id="shopping-rows"></div>
     <div class="add-row">
       <input id="shopping-item-inp" type="text" placeholder="Item…">
-      <input id="shopping-qty-inp" type="text" placeholder="Qty / note" style="max-width:130px">
+      <input id="shopping-qty-inp" type="text" placeholder="Qty / note" style="max-width:110px">
+      <input id="shopping-price-inp" type="number" placeholder="Price (₱)" style="max-width:100px">
       <button onclick="addShopping()"><i class="ti ti-plus"></i> Add</button>
     </div>
     <button class="btn" onclick="clearShoppingDone()" style="margin-top:10px">Clear picked-up items</button>
@@ -1382,6 +1452,7 @@ const DEFAULT = {
   homeState: {},
   spiritStreak: [false,false,false,false,false,false,false],
   eduChecks: {},
+  studyTopics: [],
   travelList: [
     {n:"Japan",r:"Asia"},{n:"South Korea",r:"Asia"},{n:"Vietnam",r:"Asia"},{n:"Thailand",r:"Asia"},{n:"Indonesia (Bali)",r:"Asia"},{n:"Singapore",r:"Asia"},{n:"Taiwan",r:"Asia"},
     {n:"Spain",r:"Europe"},{n:"Italy",r:"Europe"},{n:"France",r:"Europe"},{n:"Portugal",r:"Europe"},{n:"Greece",r:"Europe"},{n:"Iceland",r:"Europe"},{n:"Switzerland",r:"Europe"},
@@ -1436,6 +1507,8 @@ const DEFAULT = {
   portfolio: [],
   savingsGoals: [],
   expenses: [],
+  expenseBudget: { deposits: [] },
+  priorityExpenses: [],
   watchlist: { movies: [], tv: [], music: [] },
   readingList: [],
   calendarFeedUrl: "",
@@ -2831,9 +2904,75 @@ function renderEducation() {
       </div>
     </div>`
   ).join("");
+  renderStudyTopics();
 }
 function editEdu(ei, key, el) { STATE.eduContent[ei][key] = el.innerText.trim(); saveState(); }
 function editEduIdea(ei, ii, el) { STATE.eduContent[ei].ideas[ii] = el.innerText.trim(); saveState(); }
+
+// ─── SELF-STUDY TOPICS ───────────────────────────────────────────────────────
+// Free-form, outside any fixed degree program: a topic (e.g. "Behavioral
+// economics") with a checkable pseudo-syllabus of specific things to study
+// within it — a mini curriculum you define yourself.
+function renderStudyTopics() {
+  if (!STATE.studyTopics) STATE.studyTopics = [];
+  const topics = STATE.studyTopics;
+  document.getElementById("study-topics").innerHTML = topics.length
+    ? topics.map((t, ti) => {
+        const items = t.items || [];
+        const doneCount = items.filter(x => x.done).length;
+        return `<div class="card" style="margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+            <div class="card-title" contenteditable="true" style="outline:none;flex:1" onblur="editStudyTopic(${ti},this)" onclick="event.stopPropagation()">${escHtml(t.title)}</div>
+            <span class="f11 tc" style="white-space:nowrap">${doneCount}/${items.length}</span>
+            <i class="ti ti-trash" style="cursor:pointer;color:var(--text3);flex-shrink:0" onclick="deleteStudyTopic(${ti})"></i>
+          </div>
+          <div style="margin-top:8px;display:flex;flex-direction:column;gap:2px">
+            ${items.map((it, ii) => `<div class="chk-row${it.done ? " done" : ""}" onclick="toggleSyllabusItem(${ti},${ii})">
+              <div class="chk${it.done ? " on" : ""}"><i class="ti ti-check"></i></div>
+              <span class="chk-lbl" contenteditable="true" onblur="editSyllabusItem(${ti},${ii},this)" onclick="event.stopPropagation()">${escHtml(it.text)}</span>
+              <i class="ti ti-trash" style="cursor:pointer;color:var(--text3);flex-shrink:0" onclick="event.stopPropagation();deleteSyllabusItem(${ti},${ii})"></i>
+            </div>`).join("")}
+          </div>
+          <div class="add-row" style="margin-top:6px">
+            <input id="syllabus-inp-${ti}" type="text" placeholder="Add a specific topic to study…" onkeydown="if(event.key==='Enter'){addSyllabusItem(${ti});event.preventDefault();}">
+            <button onclick="addSyllabusItem(${ti})"><i class="ti ti-plus"></i></button>
+          </div>
+        </div>`;
+      }).join("")
+    : emptyStateHTML("ti-school", "No self-study topics yet. Add one below — e.g. \"Behavioral economics\" or \"Woodworking\" — then break it into specific things to study.");
+}
+function addStudyTopic() {
+  const inp = document.getElementById("topic-title-inp");
+  if (!inp.value.trim()) return;
+  STATE.studyTopics.push({ title: inp.value.trim(), items: [] });
+  inp.value = "";
+  saveState(); renderStudyTopics();
+}
+function editStudyTopic(ti, el) {
+  STATE.studyTopics[ti].title = el.innerText.trim() || "Untitled topic";
+  saveState();
+}
+function deleteStudyTopic(ti) { STATE.studyTopics.splice(ti, 1); saveState(); renderStudyTopics(); }
+function addSyllabusItem(ti) {
+  const inp = document.getElementById(`syllabus-inp-${ti}`);
+  if (!inp || !inp.value.trim()) return;
+  STATE.studyTopics[ti].items.push({ text: inp.value.trim(), done: false });
+  inp.value = "";
+  saveState(); renderStudyTopics();
+}
+function toggleSyllabusItem(ti, ii) {
+  const it = STATE.studyTopics[ti].items[ii];
+  it.done = !it.done;
+  saveState(); renderStudyTopics();
+}
+function editSyllabusItem(ti, ii, el) {
+  STATE.studyTopics[ti].items[ii].text = el.innerText.trim();
+  saveState();
+}
+function deleteSyllabusItem(ti, ii) {
+  STATE.studyTopics[ti].items.splice(ii, 1);
+  saveState(); renderStudyTopics();
+}
 
 function renderWellness() {
   if (!STATE.wellnessChecks) STATE.wellnessChecks = {};
@@ -3334,35 +3473,100 @@ async function fetchCalendarEvents() {
   }
 }
 
+const CAL_MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const CAL_DOW_NAMES = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const today0 = new Date();
+let calView = { year: today0.getFullYear(), month: today0.getMonth() };
+let calSelectedDate = fmtDate0(today0);
+
+function fmtDate0(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function renderCalendarList(events) {
   const el = document.getElementById("calendar-body");
   if (!el) return;
   el.innerHTML = `<div class="add-row" style="margin-top:0;margin-bottom:10px">
       <button class="btn" onclick="fetchCalendarEvents()"><i class="ti ti-refresh"></i> Refresh</button>
       <button class="btn" onclick="disconnectCalendar()"><i class="ti ti-plug-x"></i> Disconnect</button>
-    </div>` + calendarEventsHTML(events);
+    </div>` + calendarGridHTML(events) + calendarDayAgendaHTML(events);
 }
 
-function calendarEventsHTML(events) {
-  if (!events.length) return emptyStateHTML("ti-calendar-event", "No events in the next 60 days — or nothing's synced yet, try Refresh.");
-  const groups = {};
-  const order = [];
+function calNavMonth(delta) {
+  calView.month += delta;
+  if (calView.month < 0) { calView.month = 11; calView.year--; }
+  if (calView.month > 11) { calView.month = 0; calView.year++; }
+  renderCalendarList(STATE.calendarCache.events || []);
+}
+function calJumpToday() {
+  const t = new Date();
+  calView = { year: t.getFullYear(), month: t.getMonth() };
+  calSelectedDate = fmtDate0(t);
+  renderCalendarList(STATE.calendarCache.events || []);
+}
+function calSelectDay(dateStr) {
+  calSelectedDate = dateStr;
+  renderCalendarList(STATE.calendarCache.events || []);
+}
+
+function calendarGridHTML(events) {
+  const byDay = {};
   events.forEach(e => {
     const key = e.start.slice(0, 10);
-    if (!groups[key]) { groups[key] = []; order.push(key); }
-    groups[key].push(e);
+    (byDay[key] = byDay[key] || []).push(e);
   });
-  const todayKey = new Date().toISOString().slice(0, 10);
-  return order.map(key => {
-    const dayDate = new Date(key + "T00:00:00");
-    const label = dayDate.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
-    return `<div class="sl" style="margin-top:14px">${key === todayKey ? "Today — " : ""}${label}</div>` +
-      groups[key].map(e => `<div class="card" style="display:flex;align-items:center;gap:12px;margin-bottom:6px;flex-wrap:wrap">
+
+  const { year, month } = calView;
+  const firstDow = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const todayKey = fmtDate0(new Date());
+
+  const cells = [];
+  for (let i = 0; i < firstDow; i++) cells.push("");
+  for (let d = 1; d <= daysInMonth; d++) cells.push(`${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`);
+  while (cells.length % 7 !== 0) cells.push("");
+
+  const cellsHTML = cells.map(key => {
+    if (!key) return `<div class="cal-cell cal-cell-empty"></div>`;
+    const dayEvents = (byDay[key] || []).sort((a, b) => a.start.localeCompare(b.start));
+    const dayNum = +key.slice(8, 10);
+    const isToday = key === todayKey;
+    const isSel = key === calSelectedDate;
+    const shown = dayEvents.slice(0, 2);
+    const extra = dayEvents.length - shown.length;
+    return `<div class="cal-cell${isToday ? " cal-cell-today" : ""}${isSel ? " cal-cell-sel" : ""}" onclick="calSelectDay('${key}')">
+      <div class="cal-cell-num">${dayNum}</div>
+      <div class="cal-cell-events">
+        ${shown.map(e => `<div class="cal-chip">${escHtml(e.title)}</div>`).join("")}
+        ${extra > 0 ? `<div class="cal-chip cal-chip-more">+${extra} more</div>` : ""}
+      </div>
+    </div>`;
+  }).join("");
+
+  return `<div class="cal-nav">
+      <button class="btn" onclick="calNavMonth(-1)"><i class="ti ti-chevron-left"></i></button>
+      <div class="cal-nav-label">${CAL_MONTH_NAMES[month]} ${year}</div>
+      <button class="btn" onclick="calNavMonth(1)"><i class="ti ti-chevron-right"></i></button>
+      <button class="btn" onclick="calJumpToday()" style="margin-left:auto">Today</button>
+    </div>
+    <div class="cal-grid">
+      ${CAL_DOW_NAMES.map(d => `<div class="cal-dow">${d}</div>`).join("")}
+      ${cellsHTML}
+    </div>`;
+}
+
+function calendarDayAgendaHTML(events) {
+  const dayEvents = events.filter(e => e.start.slice(0, 10) === calSelectedDate).sort((a, b) => a.start.localeCompare(b.start));
+  const d = new Date(calSelectedDate + "T00:00:00");
+  const label = d.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+  const rows = dayEvents.length
+    ? dayEvents.map(e => `<div class="card" style="display:flex;align-items:center;gap:12px;margin-bottom:6px;flex-wrap:wrap">
         <div style="font-size:12px;color:var(--text3);min-width:80px;white-space:nowrap">${e.allDay ? "All day" : new Date(e.start).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}</div>
         <div style="flex:1;min-width:140px;font-size:13px;color:var(--text2)">${escHtml(e.title)}</div>
         ${e.location ? `<div style="font-size:11px;color:var(--text3)">${escHtml(e.location)}</div>` : ""}
-      </div>`).join("");
-  }).join("");
+      </div>`).join("")
+    : emptyStateHTML("ti-calendar-event", "Nothing on this day.");
+  return `<div class="sl" style="margin-top:14px">${label}</div>${rows}`;
 }
 
 function svgLineChart(points, opts) {
@@ -3832,7 +4036,7 @@ function renderPortfolio() {
         <div style="min-width:60px;font-weight:600">${p.ticker}</div>
         <div style="flex:1;min-width:110px;color:var(--text3);font-size:12px">${p.name || ''}</div>
         <div style="font-size:12px;white-space:nowrap">${p.shares} sh @ ${fmtPeso(+p.cost)}</div>
-        <div style="font-size:12px;white-space:nowrap">now ₱<span contenteditable="true" onblur="editPortfolio(${i},'price',this)" onclick="event.stopPropagation()">${(+p.price).toFixed(2)}</span></div>
+        <div style="font-size:12px;white-space:nowrap">now ₱<span contenteditable="true" onblur="editPortfolio(${i},'price',this)" onclick="event.stopPropagation()">${fmtNum(+p.price)}</span></div>
         <div style="font-size:12px;min-width:90px;text-align:right;white-space:nowrap;color:${col}">${g >= 0 ? "+" : ""}${fmtPeso(g)} (${gp.toFixed(1)}%)</div>
         <i class="ti ti-trash" style="cursor:pointer;color:var(--text3);flex-shrink:0" onclick="deletePortfolio(${i})"></i>
       </div>`;
@@ -3842,7 +4046,10 @@ function renderPortfolio() {
   snapshotPortfolioValue(totalValue);
   renderPortfolioChart();
   renderSavingsGoals();
+  renderBudget();
+  renderPriorityExpenses();
   renderExpenses();
+  renderPortfolioOverview();
 }
 
 function renderSavingsGoals() {
@@ -3869,7 +4076,7 @@ function renderSavingsGoals() {
           <div class="card-title" contenteditable="true" style="outline:none;flex:1" onblur="editSavingsGoal(${i},'name',this)" onclick="event.stopPropagation()">${escHtml(g.name || "Untitled project")}</div>
           <i class="ti ti-trash" style="cursor:pointer;color:var(--text3);flex-shrink:0" onclick="deleteSavingsGoal(${i})"></i>
         </div>
-        <div class="f11 tc">₱<span contenteditable="true" onblur="editSavingsGoal(${i},'current',this)" onclick="event.stopPropagation()">${current.toFixed(2)}</span> saved of ₱<span contenteditable="true" onblur="editSavingsGoal(${i},'target',this)" onclick="event.stopPropagation()">${target.toFixed(2)}</span> goal${funded ? " — funded!" : ""}</div>
+        <div class="f11 tc">₱<span contenteditable="true" onblur="editSavingsGoal(${i},'current',this)" onclick="event.stopPropagation()">${fmtNum(current)}</span> saved of ₱<span contenteditable="true" onblur="editSavingsGoal(${i},'target',this)" onclick="event.stopPropagation()">${fmtNum(target)}</span> goal${funded ? " — funded!" : ""}</div>
         <div class="meter-track"><div class="meter-fill" style="width:${pct}%${funded ? ";background:var(--green)" : ""}"></div></div>
       </div>`;
     }).join("")
@@ -3931,6 +4138,11 @@ function renderExpenses() {
 
   renderExpenseRows();
   attachListSearch("expense-search-inp", "expense-rows", expenseSortedWithIndex, (e, i) => expenseRowHTML(e, i), "No expenses logged yet. Add one below to start tracking where your money goes.", expenseMatchesQuery);
+
+  // Expenses deduct from the budget pool and feed the overview stats, so
+  // both need to stay in sync with every expense add/edit/delete.
+  if (document.getElementById("budget-stats")) renderBudget();
+  if (document.getElementById("portfolio-overview-stats")) renderPortfolioOverview();
 }
 function expenseSortedWithIndex() {
   return STATE.expenses
@@ -3943,7 +4155,7 @@ function expenseRowHTML(e) {
     <div style="font-size:12px;color:var(--text3);white-space:nowrap;min-width:90px" contenteditable="true" onblur="editExpense(${i},'date',this)" onclick="event.stopPropagation()">${escHtml(e.date || "")}</div>
     <div style="font-size:12px;min-width:100px;font-weight:600" contenteditable="true" onblur="editExpense(${i},'category',this)" onclick="event.stopPropagation()">${escHtml(e.category || "Uncategorized")}</div>
     <div style="flex:1;min-width:120px;font-size:12px;color:var(--text2)" contenteditable="true" onblur="editExpense(${i},'desc',this)" onclick="event.stopPropagation()">${escHtml(e.desc || "")}</div>
-    <div style="font-size:12px;min-width:80px;text-align:right;white-space:nowrap" contenteditable="true" onblur="editExpense(${i},'amount',this)" onclick="event.stopPropagation()">₱${(+e.amount || 0).toFixed(2)}</div>
+    <div style="font-size:12px;min-width:80px;text-align:right;white-space:nowrap" contenteditable="true" onblur="editExpense(${i},'amount',this)" onclick="event.stopPropagation()">₱${fmtNum(+e.amount || 0)}</div>
     <i class="ti ti-trash" style="cursor:pointer;color:var(--text3);flex-shrink:0" onclick="deleteExpense(${i})"></i>
   </div>`;
 }
@@ -3973,6 +4185,119 @@ function addExpense() {
   });
   d.value = ""; c.value = ""; desc.value = ""; a.value = "";
   saveState(); renderExpenses();
+}
+
+// ─── EXPENSE BUDGET ──────────────────────────────────────────────────────────
+// One overall pool: deposits add to it, every expense log entry deducts from
+// it automatically. The balance is derived (deposits minus all expenses)
+// rather than stored/mutated directly, so it can never drift out of sync.
+function expenseBudgetBalance() {
+  if (!STATE.expenseBudget) STATE.expenseBudget = { deposits: [] };
+  const deposited = (STATE.expenseBudget.deposits || []).reduce((s, d) => s + (d.amount || 0), 0);
+  const spent = (STATE.expenses || []).reduce((s, e) => s + (e.amount || 0), 0);
+  return deposited - spent;
+}
+function renderBudget() {
+  if (!STATE.expenseBudget) STATE.expenseBudget = { deposits: [] };
+  const deposits = STATE.expenseBudget.deposits;
+  const totalDeposited = deposits.reduce((s, d) => s + (d.amount || 0), 0);
+  const balance = expenseBudgetBalance();
+
+  document.getElementById("budget-stats").innerHTML = `
+    <div class="stat-card"><div class="stat-val" style="color:${balance >= 0 ? "var(--green)" : "var(--coral)"}">${fmtPeso(balance)}</div><div class="stat-lbl">remaining balance</div></div>
+    <div class="stat-card"><div class="stat-val">${fmtPeso(totalDeposited)}</div><div class="stat-lbl">total deposited</div></div>
+    <div class="stat-card"><div class="stat-val">${deposits.length}</div><div class="stat-lbl">deposits logged</div></div>
+  `;
+
+  document.getElementById("budget-deposits").innerHTML = deposits.length
+    ? deposits.slice().reverse().map((d) => {
+        const i = deposits.indexOf(d);
+        return `<div class="card" style="display:flex;align-items:center;gap:12px;margin-bottom:6px;flex-wrap:wrap">
+          <div style="font-size:12px;color:var(--text3);white-space:nowrap;min-width:90px">${escHtml(d.date || "")}</div>
+          <div style="flex:1;min-width:120px;font-size:12px;color:var(--text2)">${escHtml(d.note || "Deposit")}</div>
+          <div style="font-size:12px;min-width:90px;text-align:right;white-space:nowrap;color:var(--green)">+${fmtPeso(d.amount || 0)}</div>
+          <i class="ti ti-trash" style="cursor:pointer;color:var(--text3);flex-shrink:0" onclick="deleteBudgetDeposit(${i})"></i>
+        </div>`;
+      }).join("")
+    : emptyStateHTML("ti-wallet", "No deposits logged yet. Log one below to start tracking your spending budget.");
+}
+function addBudgetDeposit() {
+  const a = document.getElementById("budget-amount-inp"), n = document.getElementById("budget-note-inp");
+  if (!a.value || isNaN(parseFloat(a.value))) return;
+  if (!STATE.expenseBudget) STATE.expenseBudget = { deposits: [] };
+  STATE.expenseBudget.deposits.push({
+    date: new Date().toISOString().slice(0, 10),
+    note: n.value.trim(),
+    amount: parseFloat(a.value) || 0,
+  });
+  a.value = ""; n.value = "";
+  saveState(); renderBudget(); renderPortfolioOverview();
+}
+function deleteBudgetDeposit(i) {
+  STATE.expenseBudget.deposits.splice(i, 1);
+  saveState(); renderBudget(); renderPortfolioOverview();
+}
+
+// ─── PRIORITY EXPENSES ───────────────────────────────────────────────────────
+// A bills-to-pay tracker, separate from the expense log (which is for money
+// already spent). Marking one paid moves it into the expense log — so it
+// deducts from the budget and shows up in the category chart — instead of
+// just disappearing from the unpaid list.
+function renderPriorityExpenses() {
+  if (!STATE.priorityExpenses) STATE.priorityExpenses = [];
+  const items = STATE.priorityExpenses;
+  document.getElementById("priority-expense-rows").innerHTML = items.length
+    ? items.map((p, i) => {
+        const overdue = p.due && p.due < new Date().toISOString().slice(0, 10);
+        return `<div class="card" style="display:flex;align-items:center;gap:12px;margin-bottom:6px;flex-wrap:wrap">
+          <div style="flex:1;min-width:120px;font-size:13px;color:var(--text)">${escHtml(p.title)}</div>
+          ${p.due ? `<div style="font-size:11px;color:${overdue ? "var(--coral)" : "var(--text3)"};white-space:nowrap">${overdue ? "Overdue — " : "Due "}${escHtml(p.due)}</div>` : ""}
+          <div style="font-size:12px;min-width:90px;text-align:right;white-space:nowrap;font-weight:600">${fmtPeso(p.amount || 0)}</div>
+          <button class="btn" style="font-size:11px;padding:4px 10px" onclick="markPriorityExpensePaid(${i})">Mark paid</button>
+          <i class="ti ti-trash" style="cursor:pointer;color:var(--text3);flex-shrink:0" onclick="deletePriorityExpense(${i})"></i>
+        </div>`;
+      }).join("")
+    : emptyStateHTML("ti-alert-circle", "Nothing owed right now. Add a bill below to track it before it's paid.");
+}
+function addPriorityExpense() {
+  const t = document.getElementById("pe-title-inp"), a = document.getElementById("pe-amount-inp"), d = document.getElementById("pe-due-inp");
+  if (!t.value.trim()) return;
+  STATE.priorityExpenses.push({ title: t.value.trim(), amount: parseFloat(a.value) || 0, due: d.value || "" });
+  t.value = ""; a.value = ""; d.value = "";
+  saveState(); renderPriorityExpenses();
+}
+function deletePriorityExpense(i) { STATE.priorityExpenses.splice(i, 1); saveState(); renderPriorityExpenses(); }
+function markPriorityExpensePaid(i) {
+  const p = STATE.priorityExpenses[i];
+  STATE.expenses.push({
+    date: new Date().toISOString().slice(0, 10),
+    category: "Bills",
+    desc: p.title,
+    amount: p.amount || 0,
+  });
+  STATE.priorityExpenses.splice(i, 1);
+  saveState(); renderPriorityExpenses(); renderExpenses();
+}
+
+// ─── PORTFOLIO OVERVIEW ──────────────────────────────────────────────────────
+// A summary layer above the detailed sections — the two charts moved up here
+// too (see the HTML), so the at-a-glance numbers and their trends are visible
+// before scrolling into Holdings/Savings/Budget/Expense-log detail.
+function renderPortfolioOverview() {
+  const el = document.getElementById("portfolio-overview-stats");
+  if (!el) return;
+  const totalValue = (STATE.portfolio || []).reduce((s, p) => s + ((p.shares * p.price) || 0), 0);
+  const totalSaved = (STATE.savingsGoals || []).reduce((s, g) => s + (g.current || 0), 0);
+  const balance = expenseBudgetBalance();
+  const curMonth = new Date().toISOString().slice(0, 7);
+  const thisMonthSpent = (STATE.expenses || []).filter(e => (e.date || "").slice(0, 7) === curMonth).reduce((s, e) => s + (e.amount || 0), 0);
+
+  el.innerHTML = `
+    <div class="stat-card"><div class="stat-val">${fmtPeso(totalValue)}</div><div class="stat-lbl">portfolio value</div></div>
+    <div class="stat-card"><div class="stat-val">${fmtPeso(totalSaved)}</div><div class="stat-lbl">total saved</div></div>
+    <div class="stat-card"><div class="stat-val" style="color:${balance >= 0 ? "var(--green)" : "var(--coral)"}">${fmtPeso(balance)}</div><div class="stat-lbl">budget remaining</div></div>
+    <div class="stat-card"><div class="stat-val">${fmtPeso(thisMonthSpent)}</div><div class="stat-lbl">spent this month</div></div>
+  `;
 }
 
 function snapshotPortfolioValue(totalValue) {
@@ -4008,6 +4333,11 @@ function escHtml(s) {
 // Portfolio, savings, and expense figures are all denominated in Philippine pesos.
 function fmtPeso(v) {
   return "₱" + (v || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+// Same comma formatting as fmtPeso but without the ₱ prefix, for contenteditable
+// spans where the ₱ sign sits outside the editable region.
+function fmtNum(v) {
+  return (v || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 const MEDIA_AC_STATE = {};
@@ -4342,19 +4672,31 @@ function renderShopping() {
         <div class="chk${s.done ? " on" : ""}"><i class="ti ti-check"></i></div>
         <span class="chk-lbl" contenteditable="true" onblur="editShopping(${i},'item',this)" onclick="event.stopPropagation()">${s.item}</span>
         <span style="font-size:11px;color:var(--text3);flex-shrink:0" contenteditable="true" onblur="editShopping(${i},'qty',this)" onclick="event.stopPropagation()" data-ph="qty">${s.qty || ''}</span>
+        <span style="font-size:11px;color:var(--text2);flex-shrink:0;min-width:60px;text-align:right" contenteditable="true" onblur="editShopping(${i},'price',this)" onclick="event.stopPropagation()">${s.price ? fmtPeso(+s.price) : ''}</span>
         <i class="ti ti-trash" style="font-size:13px;color:var(--text3);cursor:pointer;flex-shrink:0" onclick="event.stopPropagation();deleteShopping(${i})"></i>
       </div>`
     ).join("")
     : emptyStateHTML("ti-shopping-cart", "List's empty. Add what you need to pick up below.");
+
+  const list = STATE.shoppingList;
+  const total = list.reduce((sum, s) => sum + (+s.price || 0), 0);
+  const remaining = list.filter(s => !s.done).reduce((sum, s) => sum + (+s.price || 0), 0);
+  document.getElementById("shopping-total").innerHTML = list.length
+    ? `Total ${fmtPeso(total)} · Still to buy ${fmtPeso(remaining)}`
+    : "";
 }
 function toggleShopping(i) { STATE.shoppingList[i].done = !STATE.shoppingList[i].done; saveState(); renderShopping(); }
-function editShopping(i, key, el) { STATE.shoppingList[i][key] = el.innerText.trim(); saveState(); }
+function editShopping(i, key, el) {
+  const val = el.innerText.trim();
+  STATE.shoppingList[i][key] = key === "price" ? (parseFloat(val.replace(/[₱,]/g, "")) || 0) : val;
+  saveState(); renderShopping();
+}
 function deleteShopping(i) { STATE.shoppingList.splice(i, 1); saveState(); renderShopping(); }
 function addShopping() {
-  const item = document.getElementById("shopping-item-inp"), qty = document.getElementById("shopping-qty-inp");
+  const item = document.getElementById("shopping-item-inp"), qty = document.getElementById("shopping-qty-inp"), price = document.getElementById("shopping-price-inp");
   if (!item.value.trim()) return;
-  STATE.shoppingList.push({ item: item.value.trim(), qty: qty.value.trim(), done: false });
-  item.value = ""; qty.value = ""; saveState(); renderShopping();
+  STATE.shoppingList.push({ item: item.value.trim(), qty: qty.value.trim(), price: +price.value || 0, done: false });
+  item.value = ""; qty.value = ""; price.value = ""; saveState(); renderShopping();
 }
 function clearShoppingDone() {
   STATE.shoppingList = STATE.shoppingList.filter(s => !s.done);
