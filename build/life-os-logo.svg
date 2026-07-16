@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="markGrad" x1="10%" y1="0%" x2="90%" y2="100%">
+      <stop offset="0%" stop-color="#2A5298"/>
+      <stop offset="100%" stop-color="#6B5FE6"/>
+    </linearGradient>
+  </defs>
+
+  <g fill="none" stroke="url(#markGrad)" stroke-width="16" stroke-linecap="round">
+    <circle cx="256" cy="266" r="92"/>
+    <g transform="rotate(-18 256 266)">
+      <ellipse cx="256" cy="266" rx="176" ry="56"/>
+      <circle cx="80" cy="266" r="15" fill="url(#markGrad)" stroke="none"/>
+      <circle cx="432" cy="266" r="15" fill="url(#markGrad)" stroke="none"/>
+    </g>
+  </g>
+</svg>

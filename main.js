@@ -20,17 +20,19 @@ const CONFIG = loadConfig();
 // change these once you've started using the app for real, or it'll look
 // like your data vanished (it'll actually just be sitting under the old
 // port's now-unused origin).
+const LAUNCHER_ICON = path.join(__dirname, 'build', 'icon.png');
+
 const APPS = {
   work: {
     title: 'Qualitech — Morning Dashboard',
     dir: path.join(__dirname, 'apps', 'work'),
-    icon: path.join(__dirname, 'apps', 'work', 'icon.svg'),
+    icon: path.join(__dirname, 'apps', 'work', 'logo.png'),
     port: 47411,
   },
   personal: {
     title: 'Project Jhabes — Life OS',
     dir: path.join(__dirname, 'apps', 'personal'),
-    icon: path.join(__dirname, 'apps', 'personal', 'icon.svg'),
+    icon: path.join(__dirname, 'apps', 'personal', 'icon.png'),
     port: 47412,
   },
 };
@@ -98,6 +100,7 @@ function createPickerWindow() {
     height: 360,
     resizable: false,
     title: 'Life OS',
+    icon: LAUNCHER_ICON,
     autoHideMenuBar: true,
     webPreferences: {
       contextIsolation: true,
@@ -113,6 +116,10 @@ function createPickerWindow() {
 ipcMain.handle('open-app', (_event, key) => openApp(key));
 
 app.whenReady().then(() => {
+  if (process.platform === 'darwin' && app.dock) {
+    app.dock.setIcon(LAUNCHER_ICON);
+  }
+
   createPickerWindow();
 
   app.on('activate', () => {

@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8F7CFF"/>
+      <stop offset="100%" stop-color="#5A4BD6"/>
+    </linearGradient>
+  </defs>
+
+  <g transform="rotate(-12 256 256)">
+    <path fill-rule="evenodd" fill="url(#ringGrad)"
+      d="M 256,166 C 350,166 426,205 426,253 C 426,301 350,340 256,340
+         C 162,340 86,301 86,253 C 86,205 162,166 256,166 Z
+         M 256,196 C 180,196 118,222 118,253 C 118,284 180,310 256,310
+         C 332,310 394,284 394,253 C 394,222 332,196 256,196 Z"/>
+  </g>
+
+  <!-- large sparkle -->
+  <path fill="url(#ringGrad)" d="
+    M 352,120
+    C 358,150 362,168 392,176
+    C 362,184 358,202 352,232
+    C 346,202 342,184 312,176
+    C 342,168 346,150 352,120 Z"/>
+
+  <!-- small sparkle -->
+  <path fill="url(#ringGrad)" d="
+    M 150,300
+    C 154,318 157,328 176,333
+    C 157,338 154,348 150,366
+    C 146,348 143,338 124,333
+    C 143,328 146,318 150,300 Z"/>
+</svg>

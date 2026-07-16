@@ -94,10 +94,14 @@ npm run dist
 Produces a platform-specific installer in `dist/` (DMG on macOS, NSIS installer on Windows,
 AppImage on Linux) via `electron-builder`, using whichever platform you run it on.
 
-**App icons**: `build/icon.icns` (mac), `build/icon.ico` (Windows), and `build/icon.png` (Linux,
-512×512) aren't included yet — `apps/work/icon.svg` and `apps/personal/icon.svg` are the source
-marks to convert (e.g. via an online SVG→ICNS/ICO converter, or `electron-icon-builder` with
-ImageMagick installed). Without them, `electron-builder` falls back to the default Electron icon.
+**App icons**: window/taskbar icons at runtime are PNGs — `apps/work/logo.png` (the actual
+Qualitech PQ mark), `apps/personal/icon.png` (ring + sparkles), and `build/icon.png` (the Life OS
+ringed-planet mark, used for the picker window and, on macOS, the dock icon). Source vector art
+lives in `build/*.svg` (`work-logo.svg`, `personal-logo.svg`, `life-os-logo.svg`) if you want to
+tweak and re-render them (`apps/work/logo.png` has no source SVG — it was supplied directly).
+
+The packaged installer's file icon uses `build/icon.png` too — `electron-builder`'s single top-level
+`icon` field auto-generates `.icns`/`.ico` from one PNG at build time, no separate files needed.
 
 **Cross-platform builds**: `electron-builder` builds for the OS it runs on by default (a proper
 signed DMG needs to be built on macOS, an NSIS installer is easiest on Windows). If you want CI to
