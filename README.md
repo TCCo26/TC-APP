@@ -20,14 +20,50 @@ separate service worker scope for Work's PWA behavior).
 
 ## Local vs. cloud
 
-Both dashboards work fully offline in this desktop build (local storage on your laptop only).
-Neither is wired up to a live Vercel deployment here, so:
+Running as a desktop app doesn't mean offline — it's a real Chromium window with your laptop's
+normal internet connection, it just isn't wired to either dashboard's backend by default:
 
-- Cloud sync (either dashboard), Finnhub live prices, and TMDb autocomplete are inactive —
-  same as opening either dashboard in a fresh browser profile with no PIN/API keys set.
-- If you later want those working here, the fix is the same for either app: point its relative
-  `/api/...` calls at your deployed Vercel URL instead of (or via a proxy in front of) the local
-  static server. Ask for this to be wired in if you want it — it needs your deployed URL(s).
+- **Finnhub live prices** (Personal → Portfolio) call `finnhub.io` directly from the browser, no
+  backend involved — just paste a free API key into that dashboard's own Settings page and it
+  works immediately, desktop app or not.
+- **Cloud sync** (both dashboards), **TMDb autocomplete** (Personal → Watchlist), and **Pulse
+  headlines** (Personal) are server-side — each dashboard's own `api/*.js` Vercel functions. Those
+  only exist once you deploy that dashboard's repo to Vercel.
+
+### Pointing this app at a deployed backend
+
+Once a dashboard is deployed on Vercel, edit `config.json` in this repo:
+
+```json
+{
+  "work": { "apiBase": "https://your-morning-dashboard.vercel.app" },
+  "personal": { "apiBase": "https://your-jm1-dashboard.vercel.app" }
+}
+```
+
+`static-server.js` proxies any `/api/...` request to that URL instead of 404ing — the dashboards'
+own code is unchanged, they already call their APIs with relative paths. Leave either `apiBase`
+blank to keep that app local-only. Restart the app after editing `config.json`.
+
+### Deploying a dashboard to Vercel
+
+Same steps for either repo (`tcco26/morning-dashboard` or `tcco26/jm1-dashboard`):
+
+1. [vercel.com](https://vercel.com) → **Add New → Project** → import the GitHub repo. No build
+   settings needed (it's static + serverless functions, Vercel detects `api/` automatically).
+2. **Storage → Create Database → Upstash for Redis** (free tier), connect it to the project. This
+   auto-injects the `KV_REST_API_URL`/`TOKEN` (or `UPSTASH_REDIS_REST_URL`/`TOKEN`) env vars both
+   dashboards' sync endpoints look for.
+3. For `morning-dashboard` only: **Settings → Environment Variables** → add `DASHBOARD_PIN` (a PIN
+   you choose — gates the sync endpoint server-side).
+4. For `jm1-dashboard` only, if you want TMDb autocomplete: add `TMDB_API_KEY` (free key from
+   [themoviedb.org](https://www.themoviedb.org/settings/api)). Not needed for cloud sync or
+   headlines.
+5. Redeploy if you added env vars after the first deploy. Copy the resulting `https://...vercel.app`
+   URL into `config.json` as above.
+6. Cloud sync itself is turned on *inside* each dashboard (Settings → Cloud sync / rail footer →
+   Connect), by entering a PIN there — separate from the `DASHBOARD_PIN` env var, which just gates
+   the endpoint.
 
 ## Running in development
 

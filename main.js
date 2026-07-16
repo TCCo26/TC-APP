@@ -1,6 +1,19 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
+const fs = require('fs');
 const path = require('path');
 const { startStaticServer } = require('./static-server');
+
+// { work: { apiBase }, personal: { apiBase } } — apiBase is a deployed Vercel
+// URL for that dashboard's own repo. Empty/missing means /api/* just 404s
+// locally, same as opening the dashboard fresh with no backend connected.
+function loadConfig() {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf8'));
+  } catch (e) {
+    return {};
+  }
+}
+const CONFIG = loadConfig();
 
 const APPS = {
   work: {
@@ -21,7 +34,8 @@ let pickerWindow = null;
 
 async function ensureServer(key) {
   if (runtime[key] && runtime[key].port) return runtime[key].port;
-  const { port } = await startStaticServer(APPS[key].dir);
+  const apiBase = (CONFIG[key] && CONFIG[key].apiBase) || '';
+  const { port } = await startStaticServer(APPS[key].dir, apiBase || undefined);
   runtime[key] = runtime[key] || {};
   runtime[key].port = port;
   return port;

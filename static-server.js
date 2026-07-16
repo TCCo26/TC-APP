@@ -2,9 +2,18 @@
 // from its own localhost port so they get separate origins — matching how
 // they already behave in a browser (separate localStorage, separate service
 // worker scope), so nothing about either dashboard's own code has to change.
+//
+// If apiBase is set (a deployed Vercel URL for that dashboard's own repo),
+// requests under /api/* are proxied there instead of served from disk — the
+// dashboards already call their own /api/... endpoints with relative paths,
+// so this lets cloud sync / TMDb / Pulse headlines work unmodified against a
+// real deployment. Without apiBase, /api/* just 404s, same as today's
+// local-only behavior.
 const http = require('http');
+const https = require('https');
 const fs = require('fs');
 const path = require('path');
+const { URL } = require('url');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -16,8 +25,33 @@ const MIME = {
   '.css': 'text/css; charset=utf-8',
 };
 
-function serveDir(rootDir) {
+function proxyApiRequest(req, res, apiBase) {
+  const target = new URL(req.url, apiBase);
+  const client = target.protocol === 'http:' ? http : https;
+
+  const upstreamReq = client.request(target, {
+    method: req.method,
+    headers: { ...req.headers, host: target.host },
+  }, (upstreamRes) => {
+    res.writeHead(upstreamRes.statusCode || 502, upstreamRes.headers);
+    upstreamRes.pipe(res);
+  });
+
+  upstreamReq.on('error', () => {
+    res.writeHead(502, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'proxy_upstream_unreachable' }));
+  });
+
+  req.pipe(upstreamReq);
+}
+
+function serveDir(rootDir, apiBase) {
   return http.createServer((req, res) => {
+    if (apiBase && req.url.startsWith('/api/')) {
+      proxyApiRequest(req, res, apiBase);
+      return;
+    }
+
     let reqPath = decodeURIComponent(req.url.split('?')[0]);
     if (reqPath === '/') reqPath = '/index.html';
     const filePath = path.normalize(path.join(rootDir, reqPath));
@@ -43,9 +77,11 @@ function serveDir(rootDir) {
 }
 
 // Starts a server on an OS-assigned free port and resolves with that port.
-function startStaticServer(rootDir) {
+// apiBase (optional): a deployed origin like "https://your-app.vercel.app" —
+// /api/* requests get proxied there instead of 404ing locally.
+function startStaticServer(rootDir, apiBase) {
   return new Promise((resolve, reject) => {
-    const server = serveDir(rootDir);
+    const server = serveDir(rootDir, apiBase);
     server.on('error', reject);
     server.listen(0, '127.0.0.1', () => {
       resolve({ server, port: server.address().port });
