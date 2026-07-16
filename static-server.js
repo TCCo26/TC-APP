@@ -76,14 +76,20 @@ function serveDir(rootDir, apiBase) {
   });
 }
 
-// Starts a server on an OS-assigned free port and resolves with that port.
-// apiBase (optional): a deployed origin like "https://your-app.vercel.app" —
-// /api/* requests get proxied there instead of 404ing locally.
-function startStaticServer(rootDir, apiBase) {
+// Starts a server on the given port (or an OS-assigned free one if omitted)
+// and resolves with the port actually used. apiBase (optional): a deployed
+// origin like "https://your-app.vercel.app" — /api/* requests get proxied
+// there instead of 404ing locally.
+//
+// A FIXED port matters here beyond just convenience: each dashboard's
+// localStorage (PIN, tasks, everything) is scoped to its exact origin
+// (http://127.0.0.1:PORT). A random port per launch would mean a different
+// origin — and a wiped-looking dashboard — every time the app restarts.
+function startStaticServer(rootDir, apiBase, port) {
   return new Promise((resolve, reject) => {
     const server = serveDir(rootDir, apiBase);
     server.on('error', reject);
-    server.listen(0, '127.0.0.1', () => {
+    server.listen(port || 0, '127.0.0.1', () => {
       resolve({ server, port: server.address().port });
     });
   });

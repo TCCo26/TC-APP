@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { startStaticServer } = require('./static-server');
@@ -15,16 +15,23 @@ function loadConfig() {
 }
 const CONFIG = loadConfig();
 
+// Ports are fixed (not OS-assigned) so each dashboard's origin — and
+// therefore its localStorage — stays the same across restarts. Don't
+// change these once you've started using the app for real, or it'll look
+// like your data vanished (it'll actually just be sitting under the old
+// port's now-unused origin).
 const APPS = {
   work: {
     title: 'Qualitech — Morning Dashboard',
     dir: path.join(__dirname, 'apps', 'work'),
     icon: path.join(__dirname, 'apps', 'work', 'icon.svg'),
+    port: 47411,
   },
   personal: {
     title: 'Project Jhabes — Life OS',
     dir: path.join(__dirname, 'apps', 'personal'),
     icon: path.join(__dirname, 'apps', 'personal', 'icon.svg'),
+    port: 47412,
   },
 };
 
@@ -35,7 +42,7 @@ let pickerWindow = null;
 async function ensureServer(key) {
   if (runtime[key] && runtime[key].port) return runtime[key].port;
   const apiBase = (CONFIG[key] && CONFIG[key].apiBase) || '';
-  const { port } = await startStaticServer(APPS[key].dir, apiBase || undefined);
+  const { port } = await startStaticServer(APPS[key].dir, apiBase || undefined, APPS[key].port);
   runtime[key] = runtime[key] || {};
   runtime[key].port = port;
   return port;
@@ -51,7 +58,16 @@ async function openApp(key) {
     return;
   }
 
-  const port = await ensureServer(key);
+  let port;
+  try {
+    port = await ensureServer(key);
+  } catch (e) {
+    dialog.showErrorBox(
+      'Could not start ' + meta.title,
+      `Port ${meta.port} is already in use by something else on this machine, so this dashboard can't start.\n\nClose whatever else is using port ${meta.port} and try again.`
+    );
+    return;
+  }
   const win = new BrowserWindow({
     width: 1360,
     height: 900,

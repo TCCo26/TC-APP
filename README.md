@@ -6,9 +6,11 @@ An Electron launcher that opens two dashboards as native app windows on your lap
 - **Personal** — [tcco26/jm1-dashboard](https://github.com/tcco26/jm1-dashboard) (Project Jhabes life OS)
 
 Launching the app opens a small picker window with two buttons. Each opens its dashboard in its
-own window, served from a local static file server on an OS-assigned `127.0.0.1` port (so each
-dashboard keeps its own separate origin, same as it would in a browser — separate `localStorage`,
-separate service worker scope for Work's PWA behavior).
+own window, served from a local static file server on a **fixed** `127.0.0.1` port per app (Work:
+`47411`, Personal: `47412` — see `main.js`). Fixed, not random, matters: each dashboard's
+`localStorage` (PIN, tasks, everything) is scoped to its exact origin, so a stable port keeps that
+origin — and your data — the same across restarts. Don't change these ports once you're using the
+app for real.
 
 ## How it's put together
 
