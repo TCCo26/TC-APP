@@ -852,6 +852,7 @@
     <div class="nav-group" data-group="connect" style="margin-top:.3rem">
       <div class="nav-group-label" onclick="toggleNavGroup('connect')">Connect & lists<i class="ti ti-chevron-down nav-group-chev"></i></div>
       <div class="nav-group-items">
+        <div class="nav-item" onclick="setPage('calendar')" data-page="calendar"><i class="ti ti-calendar-event"></i>Calendar</div>
         <div class="nav-item" onclick="setPage('pulse')" data-page="pulse"><i class="ti ti-world"></i>Pulse</div>
         <div class="nav-item" onclick="setPage('portfolio')" data-page="portfolio"><i class="ti ti-chart-candle"></i>Portfolio</div>
         <div class="nav-item" onclick="setPage('watchlist')" data-page="watchlist"><i class="ti ti-device-tv"></i>Watchlist</div>
@@ -1123,6 +1124,16 @@
       </select>
       <button onclick="addGoal()"><i class="ti ti-plus"></i> Add</button>
     </div>
+  </div>
+
+  <!-- CALENDAR -->
+  <div class="page" id="page-calendar">
+    <div class="page-header">
+      <h1>Calendar</h1>
+      <p>Agenda view of a connected Google Calendar. Read-only — edit events in Google Calendar itself.</p>
+    </div>
+    <div class="sl">Upcoming — <span id="calendar-status" class="f11 tc"></span></div>
+    <div id="calendar-body"></div>
   </div>
 
   <!-- PULSE -->
@@ -1414,6 +1425,8 @@ const DEFAULT = {
   expenses: [],
   watchlist: { movies: [], tv: [], music: [] },
   readingList: [],
+  calendarFeedUrl: "",
+  calendarCache: { fetchedAt: null, events: [] },
   apiKeys: { finnhub: "" },
   tvSymbols: [
     {symbol:"FOREXCOM:SPXUSD", title:"S&P 500"},
@@ -2210,7 +2223,7 @@ function closeSidebar() {
 const PAGE_ICONS = {
   overview:"ti-layout-grid", fitness:"ti-barbell", hobbies:"ti-palette", business:"ti-briefcase",
   education:"ti-school", wellness:"ti-heart-rate-monitor", nutrition:"ti-meat", spirit:"ti-sun",
-  journal:"ti-notebook", home:"ti-home", travel:"ti-plane", goals:"ti-target", pulse:"ti-world",
+  journal:"ti-notebook", home:"ti-home", travel:"ti-plane", goals:"ti-target", calendar:"ti-calendar-event", pulse:"ti-world",
   portfolio:"ti-chart-candle", watchlist:"ti-device-tv", reading:"ti-books", shopping:"ti-shopping-cart", discover:"ti-sparkles",
   settings:"ti-settings",
 };
@@ -3159,6 +3172,98 @@ function emptyStateHTML(icon, text) {
   return `<div class="empty-state"><i class="ti ${icon}"></i><div class="empty-state-text">${text}</div></div>`;
 }
 
+async function renderCalendar() {
+  const el = document.getElementById("calendar-body");
+  const statusEl = document.getElementById("calendar-status");
+  if (!el) return;
+  if (!STATE.calendarFeedUrl) {
+    if (statusEl) statusEl.textContent = "";
+    el.innerHTML = calendarSetupHTML();
+    return;
+  }
+  renderCalendarList(STATE.calendarCache.events || []);
+  if (statusEl) statusEl.textContent = STATE.calendarCache.fetchedAt ? `Refreshing… (last updated ${fmtDateTime(STATE.calendarCache.fetchedAt)})` : "Loading…";
+  await fetchCalendarEvents();
+}
+
+function calendarSetupHTML() {
+  return `<div class="card">
+    <div class="card-title">Connect a Google Calendar</div>
+    <div class="card-desc">Open Google Calendar (any account — doesn't have to match this dashboard's own login) → the gear icon → Settings → pick the calendar under "Settings for my calendars" → Integrate calendar → copy the <b>Secret address in iCal format</b>. Paste it below.<br><br>This stays private — the link is only used server-side to fetch your events, and nothing here changes your calendar's sharing settings.</div>
+    <div class="add-row" style="margin-top:10px">
+      <input id="calendar-url-inp" type="text" placeholder="https://calendar.google.com/calendar/ical/...">
+      <button onclick="saveCalendarFeed()"><i class="ti ti-plug"></i> Connect</button>
+    </div>
+  </div>`;
+}
+
+function saveCalendarFeed() {
+  const inp = document.getElementById("calendar-url-inp");
+  const val = (inp.value || "").trim();
+  if (!val) return;
+  try {
+    const u = new URL(val);
+    if (!/(^|\.)calendar\.google\.com$/.test(u.hostname)) { alert("That doesn't look like a calendar.google.com link — check you copied the secret iCal address."); return; }
+  } catch (e) { alert("Enter a valid URL."); return; }
+  STATE.calendarFeedUrl = val;
+  STATE.calendarCache = { fetchedAt: null, events: [] };
+  saveState();
+  renderCalendar();
+}
+function disconnectCalendar() {
+  if (!confirm("Disconnect this calendar? You can reconnect any time.")) return;
+  STATE.calendarFeedUrl = "";
+  STATE.calendarCache = { fetchedAt: null, events: [] };
+  saveState();
+  renderCalendar();
+}
+
+async function fetchCalendarEvents() {
+  const statusEl = document.getElementById("calendar-status");
+  try {
+    const r = await fetch(`/api/calendar?url=${encodeURIComponent(STATE.calendarFeedUrl)}`);
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || "fetch_failed");
+    STATE.calendarCache = { fetchedAt: new Date().toISOString(), events: data.events || [] };
+    saveState();
+    if (statusEl) statusEl.textContent = `Updated ${fmtDateTime(STATE.calendarCache.fetchedAt)}`;
+    renderCalendarList(STATE.calendarCache.events);
+  } catch (e) {
+    if (statusEl) statusEl.textContent = STATE.calendarCache.fetchedAt ? `Couldn't refresh — showing last update from ${fmtDateTime(STATE.calendarCache.fetchedAt)}` : "Couldn't load events.";
+  }
+}
+
+function renderCalendarList(events) {
+  const el = document.getElementById("calendar-body");
+  if (!el) return;
+  el.innerHTML = `<div class="add-row" style="margin-top:0;margin-bottom:10px">
+      <button class="btn" onclick="fetchCalendarEvents()"><i class="ti ti-refresh"></i> Refresh</button>
+      <button class="btn" onclick="disconnectCalendar()"><i class="ti ti-plug-x"></i> Disconnect</button>
+    </div>` + calendarEventsHTML(events);
+}
+
+function calendarEventsHTML(events) {
+  if (!events.length) return emptyStateHTML("ti-calendar-event", "No events in the next 60 days — or nothing's synced yet, try Refresh.");
+  const groups = {};
+  const order = [];
+  events.forEach(e => {
+    const key = e.start.slice(0, 10);
+    if (!groups[key]) { groups[key] = []; order.push(key); }
+    groups[key].push(e);
+  });
+  const todayKey = new Date().toISOString().slice(0, 10);
+  return order.map(key => {
+    const dayDate = new Date(key + "T00:00:00");
+    const label = dayDate.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+    return `<div class="sl" style="margin-top:14px">${key === todayKey ? "Today — " : ""}${label}</div>` +
+      groups[key].map(e => `<div class="card" style="display:flex;align-items:center;gap:12px;margin-bottom:6px;flex-wrap:wrap">
+        <div style="font-size:12px;color:var(--text3);min-width:80px;white-space:nowrap">${e.allDay ? "All day" : new Date(e.start).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}</div>
+        <div style="flex:1;min-width:140px;font-size:13px;color:var(--text2)">${escHtml(e.title)}</div>
+        ${e.location ? `<div style="font-size:11px;color:var(--text3)">${escHtml(e.location)}</div>` : ""}
+      </div>`).join("");
+  }).join("");
+}
+
 function svgLineChart(points, opts) {
   opts = opts || {};
   if (!points.length) {
@@ -3381,6 +3486,7 @@ function renderCategoryWidgets() {
     { page:"journal", icon:"ti-notebook", col:"var(--coral)", title:"Journal", stat:`${(STATE.journalEntries || []).length} entries written`, quick:"journal" },
     { page:"home", icon:"ti-home", col:"var(--blue)", title:"Home vision", stat:`${homeDone}/${homeTotal} spaces planned` },
     { page:"travel", icon:"ti-plane", col:"var(--pink)", title:"Travel", stat:`${STATE.travelList.filter(t => STATE.travelState[t.n]).length}/${STATE.travelList.length} visited` },
+    { page:"calendar", icon:"ti-calendar-event", col:"var(--purple)", title:"Calendar", stat: STATE.calendarFeedUrl ? `${(STATE.calendarCache.events || []).length} events synced` : "Not connected" },
     { page:"portfolio", icon:"ti-chart-candle", col:"var(--green)", title:"Portfolio", stat: STATE.portfolio.length ? `${fmtPeso(pfValue)} value` : "No holdings yet" },
     { page:"watchlist", icon:"ti-device-tv", col:"var(--coral)", title:"Watchlist", stat:`${watchDone}/${watchTotal} completed`, quick:"watchlist" },
     { page:"reading", icon:"ti-books", col:"var(--amber)", title:"Reading list", stat:`${readDone}/${STATE.readingList.length} finished`, quick:"reading" },
@@ -4390,6 +4496,7 @@ const PAGE_RENDERS = {
   home: renderHome,
   travel: renderTravel,
   goals: renderGoals,
+  calendar: renderCalendar,
   pulse: renderPulse,
   portfolio: renderPortfolio,
   watchlist: renderWatchlist,
@@ -4403,7 +4510,7 @@ const PAGE_TITLES = {
   overview: "Overview", fitness: "Fitness", hobbies: "Hobbies", business: "Business",
   education: "Education", wellness: "Wellness", nutrition: "Nutrition", spirit: "Mind & spirit",
   journal: "Journal",
-  home: "Home vision", travel: "Travel", goals: "Goals", pulse: "Pulse", portfolio: "Portfolio",
+  home: "Home vision", travel: "Travel", goals: "Goals", calendar: "Calendar", pulse: "Pulse", portfolio: "Portfolio",
   watchlist: "Watchlist", reading: "Reading list", shopping: "Shopping list", discover: "Discover", settings: "Settings",
 };
 
