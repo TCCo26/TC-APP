@@ -74,6 +74,13 @@ npm install
 npm start
 ```
 
+### Desktop shortcut (Windows)
+
+`Launch Life OS.vbs` starts the app with no visible terminal window, and resolves its own folder
+location automatically — it works no matter where this repo is cloned/extracted. To get a
+double-click icon on your Desktop: right-click `Launch Life OS.vbs` → **Send to → Desktop (create
+shortcut)**. That shortcut is all you need going forward; no more opening PowerShell.
+
 ## Updating the dashboards
 
 The `apps/work` and `apps/personal` folders are snapshots, not live links. To pull in the latest
