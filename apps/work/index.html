@@ -3097,6 +3097,7 @@ async function connectSync(pin, silent) {
       await pushStateToCloud();
     }
     setSyncStatus('synced');
+    if (notifActive()) subscribeForPush();
   } catch (e) {
     cloudAvailable = false;
     if (!silent) showAlertModal("Couldn't reach cloud sync. Check that the backend is deployed (see SYNC_SETUP.md) and try again.");
@@ -3205,12 +3206,59 @@ function hideLockOverlay() {
 }
 
 // ── DESKTOP NOTIFICATIONS ────────────────────────────────────────────────────
-// Browser Notification API only — fires while this tab/PWA is actually open
-// (there's no server-side push here), which is the point when running the
-// dashboard as a local web app on a laptop that's normally on and open.
+// Two layers: the Notification API fires while this tab/PWA is actually
+// open (immediate, no setup beyond permission); Web Push (below) fires even
+// when it's fully closed, but needs cloud sync connected since the check
+// runs server-side against the synced state, not this browser's localStorage.
 const NOTIF_KEY = 'qualitech_notif_enabled';
 const NOTIF_DIGEST_KEY = 'qualitech_notif_last_digest';
 const NOTIF_SEEN_OVERDUE_KEY = 'qualitech_notif_seen_overdue';
+const PUSH_VAPID_PUBLIC_KEY = 'BLEeUe5RcmhUP7EYhO1mvAZCUR78ZC7ZXzYcWEBHFebm63TgKRVj9mpE9d_LfLUQmMNtwUsIVOR0LExdw8AmMJ8';
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
+}
+
+async function subscribeForPush() {
+  if (!dashboardPin) return; // background push is checked server-side against synced state
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(PUSH_VAPID_PUBLIC_KEY),
+      });
+    }
+    await fetch('/api/push-subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-dashboard-pin': dashboardPin },
+      body: JSON.stringify({ subscription: sub.toJSON() }),
+    });
+  } catch (e) {}
+}
+
+async function unsubscribeForPush() {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      if (dashboardPin) {
+        await fetch('/api/push-subscribe', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json', 'x-dashboard-pin': dashboardPin },
+          body: JSON.stringify({ subscription: sub.toJSON() }),
+        });
+      }
+      await sub.unsubscribe();
+    }
+  } catch (e) {}
+}
 
 function notifSupported() { return 'Notification' in window; }
 function notifActive() {
@@ -3232,16 +3280,20 @@ function toggleNotifications() {
   }
   if (localStorage.getItem(NOTIF_KEY) === '1') {
     localStorage.setItem(NOTIF_KEY, '0');
+    unsubscribeForPush();
     updateNotifStatusUI();
     return;
   }
   Notification.requestPermission().then((perm) => {
     if (perm === 'granted') {
       localStorage.setItem(NOTIF_KEY, '1');
-      sendNotification('Notifications on', "You'll get a heads-up here for overdue and due-today tasks while this tab is open.", 'notif-enabled');
+      sendNotification('Notifications on', dashboardPin
+        ? "You'll get overdue/due-today alerts here, including when this app is closed."
+        : "You'll get alerts while this tab is open. Connect cloud sync (rail footer) to also get them when the app is closed.", 'notif-enabled');
       localStorage.removeItem(NOTIF_DIGEST_KEY);
       maybeSendDailyDigest();
       checkOverdueNudges();
+      subscribeForPush();
     } else {
       showAlertModal('Notifications were blocked. Allow them for this site in your browser settings, then try again.');
     }
@@ -3254,8 +3306,9 @@ function updateNotifStatusUI() {
   if (!row) return;
   const supported = notifSupported();
   const enabled = notifActive();
+  const label = !supported ? 'unsupported' : !enabled ? 'off' : dashboardPin ? 'on (works when closed)' : 'on (this tab only)';
   row.innerHTML = `
-    <span style="font-size:11px;color:var(--muted)">🔔 Desktop alerts: ${supported ? (enabled ? 'on' : 'off') : 'unsupported'}</span>
+    <span style="font-size:11px;color:var(--muted)">🔔 Alerts: ${label}</span>
     <button class="btn" style="font-size:11px;padding:4px 8px" onclick="toggleNotifications()" ${supported ? '' : 'disabled'}>${enabled ? 'Turn off' : 'Turn on'}</button>`;
 }
 

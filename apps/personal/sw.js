@@ -1,6 +1,6 @@
 // Minimal service worker: caches the app shell so the dashboard is
 // installable and still opens (against cached data) without a network.
-const CACHE = 'qp-dashboard-v1';
+const CACHE = 'jhabes-life-os-v1';
 const SHELL = ['./', './index.html', './manifest.json', './icon.svg'];
 
 self.addEventListener('install', (e) => {
@@ -33,7 +33,7 @@ self.addEventListener('fetch', (e) => {
 // Fires even when no tab/window for this app is open — this is what makes
 // notifications work when the dashboard is fully closed, not just backgrounded.
 self.addEventListener('push', (e) => {
-  let data = { title: 'Qualitech Dashboard', body: '' };
+  let data = { title: 'Project Jhabes', body: '' };
   try { data = e.data.json(); } catch (err) {}
   e.waitUntil(
     self.registration.showNotification(data.title, {

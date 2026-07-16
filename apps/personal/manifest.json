@@ -1,0 +1,16 @@
+{
+  "name": "Project Jhabes — Life OS",
+  "short_name": "Life OS",
+  "description": "Personal life-OS dashboard: fitness, hobbies, business, wellness, journal, calendar, and more.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#F2F3F9",
+  "theme_color": "#192734",
+  "orientation": "any",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

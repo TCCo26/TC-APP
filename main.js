@@ -3,6 +3,16 @@ const fs = require('fs');
 const path = require('path');
 const { startStaticServer } = require('./static-server');
 
+// Required for Windows to correctly attribute/display notifications and
+// taskbar grouping when running unpackaged (npm start / the .vbs launcher)
+// rather than from an installed .exe — without this, Windows can silently
+// drop or misattribute notifications even though the JS-level code is
+// correct. Must match package.json's build.appId, and must be set before
+// app.whenReady() / before any notification is shown.
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.tcco26.lifeosdesktop');
+}
+
 // { work: { apiBase }, personal: { apiBase } } — apiBase is a deployed Vercel
 // URL for that dashboard's own repo. Empty/missing means /api/* just 404s
 // locally, same as opening the dashboard fresh with no backend connected.

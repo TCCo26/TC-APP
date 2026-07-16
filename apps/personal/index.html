@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#192734" id="theme-color-meta">
 <title>Project Jhabes — Life OS</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Life OS">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
 <script>
   (function() {
     try {
@@ -1311,6 +1318,12 @@
         <button class="btn" onclick="lockNow()">Lock dashboard</button>
       </div>
     </div>
+    <div class="sl">Notifications</div>
+    <div class="card" style="margin-bottom:1rem">
+      <div class="card-title">Alerts: <span id="notif-status-text">off</span></div>
+      <div class="card-desc">Today's calendar events (once a day) and a heads-up shortly before an event starts. Needs cloud sync connected and a calendar feed set up on the Calendar page — otherwise this only works while the app is open.</div>
+      <div style="margin-top:8px"><button class="btn" id="notif-toggle-btn" onclick="toggleNotifications()">Turn on</button></div>
+    </div>
     <div class="sl">Live data API keys (optional)</div>
     <div class="card" style="margin-bottom:1rem">
       <div class="card-desc">Add a free Finnhub.io key to enable live price refresh on the Portfolio page. News/sports/gaming stay as curated links — those publishers block direct browser API access from static sites.</div>
@@ -2033,6 +2046,7 @@ async function changePassword() {
   CURRENT_PASS_HASH = hash;
   inp.value = '';
   pushRemote();
+  if (notifActive()) subscribeForPush();
   alert('PIN updated. Use the new PIN on any other device to keep it in sync.');
 }
 
@@ -2096,12 +2110,99 @@ function renderSyncBadge() {
   }
 }
 
+// ─── NOTIFICATIONS ───────────────────────────────────────────────────────────
+// Two layers: the Notification API fires while this tab/PWA is actually
+// open; Web Push (subscribeForPush) fires even when it's fully closed, but
+// the server-side check (api/push-check.js) reads synced state, so it needs
+// cloud sync connected (CURRENT_PASS_HASH set) to do anything.
+const NOTIF_KEY = 'jhabes_notif_enabled';
+const PUSH_VAPID_PUBLIC_KEY = 'BEzP-QrwVqJghV04b-9NBVxLa79b972fxDmPLyfab14xE3rAdKJYuattQir29D_27rYrF86XwK3xGdT6ViDZhmY';
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
+}
+
+function notifSupported() { return 'Notification' in window; }
+function notifActive() {
+  return notifSupported() && Notification.permission === 'granted' && localStorage.getItem(NOTIF_KEY) === '1';
+}
+
+async function subscribeForPush() {
+  if (!CURRENT_PASS_HASH) return;
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(PUSH_VAPID_PUBLIC_KEY),
+      });
+    }
+    await fetch('/api/push-subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: CURRENT_PASS_HASH, subscription: sub.toJSON() }),
+    });
+  } catch (e) {}
+}
+
+async function unsubscribeForPush() {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      if (CURRENT_PASS_HASH) {
+        await fetch('/api/push-subscribe', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: CURRENT_PASS_HASH, subscription: sub.toJSON() }),
+        });
+      }
+      await sub.unsubscribe();
+    }
+  } catch (e) {}
+}
+
+function toggleNotifications() {
+  if (!notifSupported()) { alert("Your browser doesn't support notifications."); return; }
+  if (localStorage.getItem(NOTIF_KEY) === '1') {
+    localStorage.setItem(NOTIF_KEY, '0');
+    unsubscribeForPush();
+    renderNotifStatus();
+    return;
+  }
+  Notification.requestPermission().then((perm) => {
+    if (perm === 'granted') {
+      localStorage.setItem(NOTIF_KEY, '1');
+      subscribeForPush();
+    } else {
+      alert('Notifications were blocked. Allow them for this site in your browser settings, then try again.');
+    }
+    renderNotifStatus();
+  });
+}
+
+function renderNotifStatus() {
+  const t = document.getElementById('notif-status-text');
+  const btn = document.getElementById('notif-toggle-btn');
+  if (!t || !btn) return;
+  const enabled = notifActive();
+  t.textContent = !notifSupported() ? 'unsupported' : !enabled ? 'off' : CURRENT_PASS_HASH ? 'on (works when closed)' : 'on (this tab only)';
+  btn.textContent = enabled ? 'Turn off' : 'Turn on';
+}
+
 function boot() {
   renderSidebar();
   renderOverview();
   applyNavCollapse();
   applyThemeIcon();
   pullRemote();
+  if (notifActive()) subscribeForPush();
 }
 
 // ─── THEME ───────────────────────────────────────────────────────────────────
@@ -4299,6 +4400,7 @@ function renderSettings() {
   const fh = document.getElementById("finnhub-inp");
   if (fh) fh.value = STATE.apiKeys.finnhub || "";
   renderSyncBadge();
+  renderNotifStatus();
 }
 
 // ─── INTERACTIONS ─────────────────────────────────────────────────────────────
@@ -4531,6 +4633,12 @@ function setPage(id) {
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 
 initLock();
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
 </script>
 </body>
 </html>
