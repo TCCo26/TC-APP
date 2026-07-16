@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { startStaticServer } = require('./static-server');
@@ -93,6 +93,15 @@ async function openApp(key) {
       nodeIntegration: false,
       sandbox: true,
     },
+  });
+
+  // Both dashboards' code already marks external links target="_blank" —
+  // Electron's default for that is to open a new Electron window, not the
+  // system browser. Route anything that isn't this window's own local
+  // origin out to the real browser instead.
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url);
+    return { action: 'deny' };
   });
 
   win.loadURL(`http://127.0.0.1:${port}/`);
