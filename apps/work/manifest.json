@@ -1,0 +1,25 @@
+{
+  "name": "Qualitech Philippines — Morning Dashboard",
+  "short_name": "QP Dashboard",
+  "description": "CEO morning dashboard for Qualitech Philippines: desks, tasks, notes, calendar, and document links.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#F0F2F5",
+  "theme_color": "#1B3A6B",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

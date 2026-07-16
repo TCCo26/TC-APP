@@ -1,0 +1,3459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Qualitech Philippines — Morning Dashboard</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<meta name="theme-color" content="#1B3A6B">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="QP Dashboard">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<style>
+:root {
+  --bg: #F0F2F5;
+  --surface: #FFFFFF;
+  --navy: #1B3A6B;
+  --navy-light: #2A5298;
+  --teal: #1B6B5A;
+  --border: #E2E5EA;
+  --border-strong: #C8CDD6;
+  --muted: #6B7380;
+  --text: #1A1D23;
+  --text-2: #4A5060;
+  /* Priority colors: p1 Overdue (red), p2 Urgent (yellow),
+     p3 Complete Today (purple), p4 Not Urgent (white) */
+  --p1-color: #C0392B;
+  --p1-bg: #FDF0EF;
+  --p1-border: #E74C3C;
+  --p2-color: #8A6D00;
+  --p2-bg: #FFF6D6;
+  --p2-border: #F0C419;
+  --p3-color: #7D3C98;
+  --p3-bg: #F5EEF8;
+  --p3-border: #C39BD3;
+  --p4-color: #4A5568;
+  --p4-bg: #FFFFFF;
+  --p4-border: #CBD5E0;
+  --done-color: #718096;
+  --green: #1A7A4A;
+  --green-bg: #EEF8F3;
+  --rail-w: 230px;
+  --top-h: 112px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+/* ── TOP BAR ── */
+.topbar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: var(--top-h);
+  background: var(--navy);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 24px;
+  gap: 10px;
+}
+
+.topbar-row1 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-mark {
+  width: 32px; height: 32px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; color: #fff;
+  letter-spacing: -0.5px;
+}
+
+.brand-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.9);
+  letter-spacing: 0.02em;
+}
+
+.brand-sub {
+  font-size: 11px;
+  color: rgba(255,255,255,0.45);
+  margin-left: 2px;
+}
+
+.topbar-date {
+  font-size: 12px;
+  color: rgba(255,255,255,0.55);
+  font-variant-numeric: tabular-nums;
+}
+
+.kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.kpi {
+  background: rgba(255,255,255,0.08);
+  border-radius: 7px;
+  padding: 7px 12px;
+  border: 1px solid rgba(255,255,255,0.08);
+  text-align: left;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.kpi:hover { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.18); }
+
+.kpi-label {
+  font-size: 10px;
+  color: rgba(255,255,255,0.45);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 2px;
+}
+
+.kpi-val {
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+}
+
+.kpi-val.danger { color: #FF8080; }
+.kpi-val.warn   { color: #FFD080; }
+.kpi-val.ok     { color: #80FFBC; }
+
+/* ── LAYOUT SHELL ── */
+.shell {
+  display: flex;
+  padding-top: var(--top-h);
+  min-height: 100vh;
+}
+
+/* ── LEFT RAIL ── */
+.rail {
+  width: var(--rail-w);
+  position: fixed;
+  top: var(--top-h);
+  bottom: 0;
+  left: 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.rail-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  padding: 16px 16px 6px;
+}
+
+.desk-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px;
+  cursor: pointer;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  border-radius: 0;
+  transition: background 0.1s;
+  position: relative;
+}
+
+.desk-btn:hover { background: #F4F6F9; }
+
+.desk-btn.active {
+  background: #EEF3FB;
+}
+
+.desk-btn.active::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--navy);
+  border-radius: 0 2px 2px 0;
+}
+
+.desk-icon {
+  width: 28px; height: 28px;
+  border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.desk-info { flex: 1; min-width: 0; }
+
+.desk-num {
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.desk-name-text {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.desk-btn.active .desk-name-text { color: var(--navy); }
+
+.desk-count {
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  padding: 0 4px;
+}
+
+.desk-count.has-p1 { background: var(--p1-bg); color: var(--p1-color); }
+.desk-count.has-p2 { background: var(--p2-bg); color: var(--p2-color); }
+.desk-count.none   { background: var(--green-bg); color: var(--green); }
+.desk-count.empty  { background: var(--bg); color: var(--muted); }
+
+.rail-footer {
+  margin-top: auto;
+  padding: 14px 16px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+/* ── MAIN CONTENT ── */
+.main {
+  margin-left: var(--rail-w);
+  flex: 1;
+  padding: 24px;
+  min-width: 0;
+}
+
+.desk-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 18px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.desk-title-area { flex: 1; }
+
+.desk-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+
+.desk-desc {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.desk-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.btn {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 7px 14px;
+  border-radius: 7px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text-2);
+  cursor: pointer;
+  transition: background 0.1s, border-color 0.1s;
+  white-space: nowrap;
+}
+
+.btn:hover { background: var(--bg); border-color: var(--border-strong); }
+
+.btn-primary {
+  background: var(--navy);
+  color: #fff;
+  border-color: var(--navy);
+}
+
+.btn-primary:hover { background: var(--navy-light); border-color: var(--navy-light); }
+.btn:disabled { opacity: 0.45; cursor: default; pointer-events: none; }
+
+.btn-danger {
+  color: var(--p1-color);
+  border-color: var(--p1-border);
+}
+
+.btn-danger:hover { background: var(--p1-bg); }
+
+/* ── TASK CARDS ── */
+.tasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.task-card {
+  background: var(--surface);
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  transition: box-shadow 0.15s;
+}
+
+.task-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+
+.task-card.done {
+  opacity: 0.55;
+}
+
+.task-card.p1 { border-left: 4px solid var(--p1-border); }
+.task-card.p2 { border-left: 4px solid var(--p2-border); }
+.task-card.p3 { border-left: 4px solid var(--p3-border); }
+.task-card.p4 { border-left: 4px solid var(--p4-border); }
+
+@keyframes heatpulse {
+  0%   { border-left-color: var(--p1-border); }
+  50%  { border-left-color: #FF6B6B; }
+  100% { border-left-color: var(--p1-border); }
+}
+
+.task-card.p1 { animation: heatpulse 2s ease-in-out 1; }
+
+.task-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+}
+
+.task-check {
+  width: 18px; height: 18px;
+  border-radius: 5px;
+  border: 1.5px solid var(--border-strong);
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-top: 1px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+  background: var(--surface);
+}
+
+.task-check:hover { border-color: var(--teal); }
+.task-check.checked { background: var(--teal); border-color: var(--teal); }
+
+.task-check.checked::after {
+  content: '';
+  width: 10px; height: 6px;
+  border-left: 2px solid #fff;
+  border-bottom: 2px solid #fff;
+  transform: rotate(-45deg) translateY(-1px);
+}
+
+.task-body { flex: 1; min-width: 0; }
+
+.task-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+
+.task-title-input {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  border: none;
+  background: transparent;
+  outline: none;
+  width: 100%;
+  font-family: inherit;
+  line-height: 1.4;
+  resize: none;
+  padding: 0;
+}
+
+.task-title-input:focus {
+  color: var(--navy);
+}
+
+.task-card.done .task-title-input {
+  text-decoration: line-through;
+  color: var(--done-color);
+}
+
+.task-meta-input {
+  font-size: 11px;
+  color: var(--muted);
+  border: none;
+  background: transparent;
+  outline: none;
+  width: 100%;
+  font-family: inherit;
+  line-height: 1.5;
+  resize: none;
+  padding: 0;
+}
+
+.task-meta-input:focus { color: var(--text-2); }
+
+.task-meta-input::placeholder { color: var(--border-strong); }
+
+.task-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 260px;
+}
+
+.priority-btn {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  border: none;
+  white-space: nowrap;
+  letter-spacing: 0.03em;
+  transition: opacity 0.1s;
+}
+
+.priority-btn:hover { opacity: 0.8; }
+
+.priority-select {
+  font-family: inherit;
+  outline: none;
+  appearance: auto;
+}
+
+.priority-btn.p1 { background: var(--p1-bg); color: var(--p1-color); border: 1px solid #F5C6C4; }
+.priority-btn.p2 { background: var(--p2-bg); color: var(--p2-color); border: 1px solid #F5DFA0; }
+.priority-btn.p3 { background: var(--p3-bg); color: var(--p3-color); border: 1px solid #B8D4EF; }
+.priority-btn.p4 { background: var(--p4-bg); color: var(--p4-color); border: 1px solid var(--border-strong); }
+
+/* ── STATUS BAR ── */
+.status-btn {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  border: none;
+  white-space: nowrap;
+  letter-spacing: 0.03em;
+  transition: opacity 0.1s;
+}
+.status-btn:hover { opacity: 0.8; }
+/* Independent of the priority colors below — status is a different axis
+   (workflow stage) from priority (urgency), so it shouldn't shift when
+   priority colors change. */
+.status-btn.not-started { background: #F7F8FA; color: #4A5568; border: 1px solid var(--border-strong); }
+.status-btn.in-progress { background: #EEF4FB; color: #1A5A9A; border: 1px solid #B8D4EF; }
+.status-btn.blocked     { background: #FDF0EF; color: #C0392B; border: 1px solid #F5C6C4; }
+.status-btn.done        { background: var(--green-bg); color: var(--green); border: 1px solid #BFE3D0; }
+
+/* ── DATE COLUMN ── */
+.date-input {
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 3px 6px;
+  color: var(--text-2);
+  background: var(--bg);
+  outline: none;
+  font-family: inherit;
+  max-width: 128px;
+}
+
+.delete-btn {
+  width: 24px; height: 24px;
+  border-radius: 5px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  opacity: 0;
+  transition: opacity 0.1s, background 0.1s;
+}
+
+.task-card:hover .delete-btn { opacity: 1; }
+.delete-btn:hover { background: var(--p1-bg); color: var(--p1-color); }
+
+/* ── NOTES AREA ── */
+.task-notes-area {
+  border-top: 1px solid var(--border);
+  padding: 8px 14px 10px 44px;
+  display: none;
+}
+
+.task-notes-area.open { display: block; }
+
+.task-notes {
+  font-size: 12px;
+  color: var(--text-2);
+  border: none;
+  background: transparent;
+  outline: none;
+  width: 100%;
+  font-family: inherit;
+  line-height: 1.6;
+  resize: none;
+  min-height: 40px;
+}
+
+.task-notes::placeholder { color: var(--border-strong); font-style: italic; }
+.task-notes:focus { color: var(--text); }
+
+/* ── NOTES TOGGLE ── */
+.task-toggle-row {
+  display: flex;
+  gap: 12px;
+  margin-top: 2px;
+}
+
+.notes-toggle {
+  font-size: 10px;
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  display: flex; align-items: center; gap: 3px;
+  transition: color 0.1s;
+}
+
+.notes-toggle:hover { color: var(--navy); }
+
+/* ── TASK LINK ── */
+.task-link-icon { color: var(--navy-light); }
+.task-link-icon:hover { color: var(--navy); text-decoration: underline; }
+
+.task-link-area {
+  border-top: 1px solid var(--border);
+  padding: 8px 14px 10px 44px;
+  display: none;
+}
+
+.task-link-area.open { display: block; }
+
+.task-link-input {
+  font-size: 12px;
+  color: var(--text-2);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  outline: none;
+  width: 100%;
+  font-family: inherit;
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+
+.task-link-input:focus { color: var(--text); border-color: var(--border-strong); }
+
+/* ── ADD TASK AREA ── */
+.add-task-area {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px dashed var(--border-strong);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: text;
+  transition: border-color 0.15s;
+  flex-wrap: wrap;
+}
+
+.add-task-area:hover, .add-task-area:focus-within {
+  border-color: var(--navy);
+  border-style: solid;
+}
+
+.add-icon {
+  width: 18px; height: 18px;
+  border-radius: 5px;
+  background: var(--bg);
+  border: 1.5px solid var(--border-strong);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.add-input {
+  flex: 1;
+  min-width: 140px;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.add-input::placeholder { color: var(--border-strong); }
+
+.add-priority-select {
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 3px 6px;
+  color: var(--text-2);
+  background: var(--bg);
+  cursor: pointer;
+  outline: none;
+}
+
+/* ── SECTION DIVIDERS ── */
+.section-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 0 8px;
+}
+
+.section-divider-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.section-divider-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* ── EMPTY STATE ── */
+.empty-state {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--muted);
+}
+
+.empty-icon {
+  font-size: 32px;
+  margin-bottom: 12px;
+  opacity: 0.4;
+}
+
+.empty-text {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* ── NOTES (DAILY LOG) ── */
+.notes-layout {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+.notes-editor {
+  flex: 1;
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  --p-space: 10px;
+}
+.notes-editor-inner {
+  padding: 20px 20px 0;
+}
+.notes-editor-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.notes-editor-date {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--navy);
+}
+.notes-editor-dow {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 500;
+}
+.notes-editor-head-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.notes-saved {
+  font-size: 11px;
+  color: var(--green);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.notes-title-input {
+  display: block;
+  width: 100%;
+  border: none;
+  outline: none;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  padding: 6px 0 8px;
+  margin-top: 2px;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+}
+.notes-title-input::placeholder { color: var(--border-strong); font-weight: 500; }
+.notes-tag-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.notes-tag-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-right: 2px;
+}
+.notes-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px 4px 8px;
+  border-radius: 12px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: var(--bg);
+  color: var(--muted);
+}
+.notes-tag .tag-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: var(--border-strong); }
+.notes-tag.selected { background: var(--tag-bg); color: var(--tag-color); border-color: var(--tag-color); }
+.notes-tag.selected .tag-dot { background: var(--tag-color); }
+.notes-tag:not(.selected):hover { background: #E9EBEF; }
+.notes-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px 12px;
+  background: #F7F8FA;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  margin-top: 14px;
+}
+.notes-toolbar select {
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--text-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 5px 6px;
+  background: var(--surface);
+  cursor: pointer;
+  outline: none;
+}
+.tb-btn {
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-2);
+  font-size: 13px;
+  cursor: pointer;
+}
+.tb-btn:hover { background: #E9EBEF; }
+.tb-btn.active { background: #DCE6F5; border-color: #B8CBE8; color: var(--navy); }
+.tb-sep { width: 1px; height: 20px; background: var(--border-strong); margin: 0 4px; }
+.tb-color-swatch {
+  width: 20px; height: 20px; border-radius: 4px; cursor: pointer; border: 1px solid var(--border-strong); padding: 0;
+}
+.notes-editable {
+  min-height: 300px;
+  outline: none;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--text);
+  padding: 14px 20px 20px;
+}
+.notes-editable p, .notes-editable div { margin-bottom: var(--p-space); }
+.notes-editable ul, .notes-editable ol { padding-left: 22px; margin-bottom: var(--p-space); }
+.notes-editable:empty::before {
+  content: attr(data-placeholder);
+  color: var(--border-strong);
+}
+
+.notes-outline {
+  width: 230px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.notes-outline-head {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.notes-outline-search {
+  display: block;
+  width: calc(100% - 20px);
+  margin: 10px 10px 4px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg);
+  outline: none;
+  font-family: inherit;
+}
+.notes-outline-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 8px 10px 2px;
+}
+.notes-outline-filter .notes-tag { padding: 3px 8px 3px 7px; font-size: 10.5px; }
+.notes-outline-month {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 10px 14px 4px;
+}
+.notes-outline-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  cursor: pointer;
+  position: relative;
+  font-size: 12.5px;
+  color: var(--text-2);
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+}
+.notes-outline-item:hover { background: #F4F6F9; }
+.notes-outline-item.active {
+  background: #EEF3FB;
+  color: var(--navy);
+  font-weight: 600;
+}
+.notes-outline-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--navy);
+}
+.notes-outline-dot {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--border-strong);
+  flex-shrink: 0;
+}
+.notes-outline-item.active .notes-outline-dot { background: var(--navy); }
+.notes-outline-snippet {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+.notes-outline-tags {
+  display: flex;
+  gap: 3px;
+  flex-shrink: 0;
+}
+.notes-outline-tags .tag-dot { width: 6px; height: 6px; border-radius: 50%; }
+.notes-outline-empty {
+  padding: 16px 14px;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* ── OVERVIEW ── */
+.ov-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.ov-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  cursor: pointer;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+.ov-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06); border-color: var(--border-strong); }
+.ov-card-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.ov-card-title { font-size: 13px; font-weight: 600; color: var(--text); }
+.ov-card-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
+.ov-card-counts { display: flex; gap: 6px; flex-wrap: wrap; }
+.ov-pill { font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 99px; }
+.ov-pill.p1 { background: var(--p1-bg); color: var(--p1-color); }
+.ov-pill.p2 { background: var(--p2-bg); color: var(--p2-color); }
+.ov-pill.ok { background: var(--green-bg); color: var(--green); }
+
+/* ── MORNING CHECKLIST ── */
+.checklist-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px;
+  margin-bottom: 16px;
+}
+.checklist-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px 8px;
+}
+.checklist-title { font-size: 13px; font-weight: 700; color: var(--text); }
+.checklist-track {
+  height: 5px; background: var(--bg); border-radius: 3px; overflow: hidden;
+  margin: 0 14px 8px;
+}
+.checklist-fill { height: 100%; background: var(--green); border-radius: 3px; transition: width 0.2s ease; }
+.checklist-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 14px; border-radius: 8px; cursor: pointer;
+}
+.checklist-item:hover { background: var(--bg); }
+.checklist-item.checked .checklist-label { text-decoration: line-through; color: var(--done-color); }
+.checklist-label { flex: 1; font-size: 13px; font-weight: 500; min-width: 0; }
+.checklist-sub { font-size: 11px; color: var(--muted); white-space: nowrap; }
+
+/* ── PRODUCTIVITY SNAPSHOT (Overview charts) ── */
+.prod-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.prod-card-wide { grid-column: 1 / -1; }
+.prod-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.prod-card-title { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 10px; }
+.prod-card-sub { font-size: 11px; color: var(--muted); margin-top: 8px; }
+.prod-meter-row { display: flex; align-items: center; gap: 10px; }
+.prod-meter-track { flex: 1; height: 10px; background: var(--bg); border-radius: 5px; overflow: hidden; }
+.prod-meter-fill { height: 100%; background: var(--green); border-radius: 5px; }
+.prod-meter-value {
+  font-size: 18px; font-weight: 700; color: var(--text);
+  font-variant-numeric: tabular-nums; min-width: 46px; text-align: right;
+}
+.prod-stack { display: flex; height: 20px; border-radius: 5px; overflow: hidden; background: var(--bg); }
+.prod-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 10px; }
+.prod-legend-item { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-2); }
+.prod-legend-swatch { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+.prod-bars { display: flex; flex-direction: column; gap: 8px; }
+.prod-bar-row { display: flex; align-items: center; gap: 8px; }
+.prod-bar-label {
+  width: 150px; font-size: 11px; color: var(--text-2); flex-shrink: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.prod-bar-track { flex: 1; background: var(--bg); border-radius: 4px; height: 16px; }
+.prod-bar-fill { height: 100%; background: var(--navy-light); border-radius: 4px; }
+.prod-bar-value { width: 22px; font-size: 11px; color: var(--text-2); text-align: right; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+
+@media (max-width: 860px) {
+  .prod-grid { grid-template-columns: 1fr; }
+  .prod-bar-label { width: 110px; }
+  .checklist-item { flex-wrap: wrap; }
+  .checklist-sub { width: 100%; margin-left: 44px; }
+}
+
+/* ── CALENDAR ── */
+.cal-dow {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  margin-top: 16px;
+  margin-bottom: 4px;
+}
+.cal-dow div {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--muted); text-align: center;
+}
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+}
+.cal-cell {
+  aspect-ratio: 1;
+  min-height: 72px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow: hidden;
+}
+.cal-cell.empty { background: transparent; border: none; }
+.cal-cell.today { border-color: var(--navy); border-width: 1.5px; }
+.cal-daynum { font-size: 11px; font-weight: 600; color: var(--text-2); flex-shrink: 0; }
+.cal-chips { display: flex; flex-direction: column; gap: 3px; overflow-y: auto; flex: 1; min-height: 0; }
+.cal-chip {
+  font-size: 10px; padding: 2px 6px; border-radius: 5px; cursor: grab;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  border: 1px solid var(--border-strong); background: var(--bg); color: var(--text-2);
+  display: flex; align-items: center; gap: 4px; justify-content: space-between;
+}
+.cal-chip.task.p1 { background: var(--p1-bg); color: var(--p1-color); border-color: var(--p1-border); }
+.cal-chip.task.p2 { background: var(--p2-bg); color: var(--p2-color); border-color: var(--p2-border); }
+.cal-chip.task.p3 { background: var(--p3-bg); color: var(--p3-color); border-color: var(--p3-border); }
+.cal-chip.task.p4 { background: var(--p4-bg); color: var(--p4-color); border-color: var(--p4-border); }
+.cal-chip.meeting { background: #EEEDFE; color: #534AB7; border-color: #D6D3FB; }
+.chip-del { cursor: pointer; opacity: 0.6; flex-shrink: 0; }
+.chip-del:hover { opacity: 1; }
+.unscheduled-tray {
+  display: flex; flex-wrap: wrap; gap: 6px; padding: 10px;
+  background: var(--surface); border: 1px dashed var(--border-strong);
+  border-radius: 10px; margin-bottom: 6px; min-height: 40px;
+}
+
+/* ── DOC LINKS ── */
+.link-icon {
+  width: 28px; height: 28px; border-radius: 7px; background: var(--bg);
+  display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0;
+}
+
+/* ── KPI MODAL ── */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(15,20,30,0.45); z-index: 300;
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+}
+.modal-panel {
+  background: var(--surface); border-radius: 12px; width: 100%; max-width: 540px;
+  max-height: 80vh; display: flex; flex-direction: column;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+}
+.modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 18px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.modal-title { font-size: 15px; font-weight: 700; color: var(--text); }
+.modal-list { padding: 10px; overflow-y: auto; }
+.modal-item {
+  display: flex; align-items: center; gap: 10px; padding: 9px 10px;
+  border-radius: 8px; cursor: pointer; transition: background 0.1s;
+}
+.modal-item:hover { background: var(--bg); }
+
+/* ── LOCK SCREEN ── */
+.lock-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: linear-gradient(160deg, var(--navy) 0%, #142744 100%);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+}
+.lock-card {
+  background: var(--surface);
+  border-radius: 14px;
+  padding: 28px 26px;
+  width: 100%; max-width: 320px;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+}
+.lock-title { font-size: 17px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.lock-sub { font-size: 12px; color: var(--muted); margin-bottom: 18px; }
+.lock-input {
+  width: 100%;
+  font-size: 28px;
+  letter-spacing: 14px;
+  text-align: center;
+  padding: 10px 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  outline: none;
+  font-family: inherit;
+  color: var(--text);
+}
+.lock-input:focus { border-color: var(--navy); }
+.lock-error { font-size: 11px; color: var(--p1-color); margin-top: 8px; }
+.lock-forgot {
+  display: block;
+  margin: 14px auto 0;
+  font-size: 11px;
+  color: var(--muted);
+  background: none; border: none; cursor: pointer;
+  text-decoration: underline;
+}
+.lock-forgot:hover { color: var(--navy); }
+
+/* ── MOBILE HAMBURGER (hidden on desktop) ── */
+.hamburger-btn {
+  display: none;
+  width: 34px; height: 34px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+  align-items: center; justify-content: center;
+  font-size: 16px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.topbar-icon-btn {
+  display: flex;
+  width: 34px; height: 34px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+  align-items: center; justify-content: center;
+  font-size: 16px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.topbar-icon-btn:hover { background: rgba(255,255,255,0.16); }
+
+.rail-backdrop { display: none; }
+
+/* ── CALENDAR SCROLL WRAPPER (used on mobile) ── */
+.cal-scroll { }
+
+/* ── RESPONSIVE / MOBILE ── */
+@media (max-width: 860px) {
+  :root { --rail-w: 260px; --top-h: 140px; }
+
+  .hamburger-btn { display: flex; }
+
+  .topbar { padding: 0 14px; gap: 8px; }
+  .brand-sub { display: none; }
+  .brand-name { font-size: 12px; }
+  .kpi-strip { grid-template-columns: repeat(2, 1fr); gap: 6px; }
+  .kpi { padding: 6px 9px; }
+  .kpi-val { font-size: 16px; }
+  .kpi-label { font-size: 9px; }
+
+  .rail {
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    box-shadow: 2px 0 24px rgba(0,0,0,0.18);
+    z-index: 210;
+  }
+  .rail.open { transform: translateX(0); }
+
+  .rail-backdrop {
+    display: block;
+    position: fixed;
+    top: var(--top-h); left: 0; right: 0; bottom: 0;
+    background: rgba(10,15,25,0.4);
+    z-index: 205;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+  .rail-backdrop.open { opacity: 1; pointer-events: auto; }
+
+  .main { margin-left: 0; padding: 16px 14px 32px; }
+
+  .desk-header { flex-direction: column; align-items: stretch; gap: 10px; }
+  .desk-actions { justify-content: flex-start; flex-wrap: wrap; }
+
+  .task-main { padding: 11px; gap: 10px; flex-wrap: wrap; }
+  .task-body { min-width: 180px; }
+
+  .notes-layout { flex-direction: column-reverse; }
+  .notes-outline { width: 100%; }
+  .task-controls { width: 100%; max-width: 100%; justify-content: flex-start; margin-top: 4px; padding-left: 30px; }
+
+  .add-task-area { flex-direction: column; align-items: stretch; }
+  .add-task-area .add-icon { display: none; }
+  .add-priority-select, .add-task-area input[type="date"], .add-task-area input[type="time"] { width: 100%; }
+
+  .cal-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 -14px; padding: 0 14px; }
+  .cal-dow, .cal-grid { min-width: 600px; }
+
+  .ov-grid { grid-template-columns: 1fr; }
+  .g2, .g3, .g4 { grid-template-columns: 1fr; }
+
+  .modal-overlay { padding: 12px; align-items: flex-end; }
+  .modal-panel { max-width: 100%; max-height: 85vh; }
+}
+
+@media (max-width: 420px) {
+  .brand-name { font-size: 11px; }
+  .topbar-date { font-size: 10px; }
+  .kpi-val { font-size: 15px; }
+}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- LOCK SCREEN (shown until the on-device passcode is entered) -->
+<div id="lock-overlay" class="lock-overlay"></div>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-row1">
+    <div style="display:flex;align-items:center;gap:10px;min-width:0">
+      <button class="hamburger-btn" onclick="toggleRail()" aria-label="Open menu">☰</button>
+      <div class="brand">
+        <div class="brand-mark">QP</div>
+        <div>
+          <div class="brand-name">Qualitech Philippines</div>
+          <div class="brand-sub">CEO Morning Dashboard</div>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:14px">
+      <button class="topbar-icon-btn" onclick="openSearchModal()" aria-label="Search tasks" title="Search tasks (/)">🔎</button>
+      <div class="topbar-date" id="topbar-date"></div>
+    </div>
+  </div>
+  <div class="kpi-strip">
+    <button class="kpi" onclick="openKpiModal('overdue')" title="Click to see the full list">
+      <div class="kpi-label">Overdue</div>
+      <div class="kpi-val danger" id="kpi-overdue">0</div>
+    </button>
+    <button class="kpi" onclick="openKpiModal('p1')" title="Click to see the full list">
+      <div class="kpi-label">Due today</div>
+      <div class="kpi-val warn" id="kpi-p1">0</div>
+    </button>
+    <button class="kpi" onclick="openKpiModal('open')" title="Click to see the full list">
+      <div class="kpi-label">In progress</div>
+      <div class="kpi-val" id="kpi-open">0</div>
+    </button>
+    <button class="kpi" onclick="openKpiModal('done')" title="Click to see the full list">
+      <div class="kpi-label">Done today</div>
+      <div class="kpi-val ok" id="kpi-done">0</div>
+    </button>
+  </div>
+</div>
+
+<!-- SHELL -->
+<div class="shell">
+
+  <!-- LEFT RAIL -->
+  <nav class="rail">
+    <div id="rail-nav-content"></div>
+    <div class="rail-footer">
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <button class="btn" style="flex:1;font-size:11px;padding:6px 8px" onclick="exportBackup()">⬇ Export</button>
+        <button class="btn" style="flex:1;font-size:11px;padding:6px 8px" onclick="document.getElementById('import-file-input').click()">⬆ Import</button>
+      </div>
+      <input type="file" id="import-file-input" accept="application/json" style="display:none" onchange="importBackup(event)">
+      <div id="sync-status-row" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding-top:8px;border-top:1px solid var(--border)">
+        <span id="sync-status-text" style="font-size:11px;color:var(--muted)">☁ Cloud sync: off</span>
+        <button class="btn" id="sync-action-btn" style="font-size:11px;padding:4px 8px" onclick="openSyncModal()">Connect</button>
+      </div>
+      <div id="notif-status-row" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding-top:8px;border-top:1px solid var(--border)"></div>
+      <div id="lock-status-row" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding-top:8px;border-top:1px solid var(--border)"></div>
+      Auto-saved to this browser.<br>
+      Data stays on your device.
+    </div>
+  </nav>
+  <div class="rail-backdrop" onclick="closeRailMobile()"></div>
+
+  <!-- MAIN -->
+  <main class="main" id="main-content"></main>
+
+</div>
+
+<div id="modal-root"></div>
+
+<script>
+// ── DESKS (reordered: 4,1,2,6,3,5,7 → new 01–07) ─────────────────────────────
+const DESKS = [
+  { id:'email', num:'01', name:'Email, investors & loans', sub:'Correspondence, relations, follow-ups', icon:'📬', ic_bg:'#E6F1FB', ic_color:'#185FA5' },
+  { id:'fin',   num:'02', name:'Financial',                sub:'Branch P&L, collections, variances',    icon:'📊', ic_bg:'#E1F5EE', ic_color:'#0F6E56' },
+  { id:'pay',   num:'03', name:'Payables & loans',         sub:'Bills, debt repayment, priority queue', icon:'🧾', ic_bg:'#FAECE7', ic_color:'#993C1D' },
+  { id:'mkt',   num:'04', name:'Marketing',                sub:'Approvals, designer briefs, calendar',  icon:'📣', ic_bg:'#EEEDFE', ic_color:'#534AB7' },
+  { id:'ops',   num:'05', name:'Operational',              sub:'Staff, supplies, quality, branch issues',icon:'⚙️', ic_bg:'#FBEAF0', ic_color:'#993556' },
+  { id:'dev',   num:'06', name:'Business Development',     sub:'New branches, site selection, contractor coordination', icon:'🏗️', ic_bg:'#FAEEDA', ic_color:'#854F0B' },
+  { id:'report',num:'07', name:'Company review',           sub:'Snapshots, partner updates, scorecard', icon:'📋', ic_bg:'#EAF3DE', ic_color:'#3B6D11' },
+  { id:'legal', num:'08', name:'Legal and Administrative', sub:'Permits, registrations, SEC/FDA & compliance filings', icon:'⚖️', ic_bg:'#ECEDF2', ic_color:'#37415C' },
+];
+
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const DOW_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+// Named to match the top-of-dashboard KPI titles (e.g. "Overdue") instead of
+// a bare "P1" so the priority a task carries reads the same way everywhere.
+const PRIORITY_LABELS = { p1:'Overdue (P1)', p2:'Urgent (P2)', p3:'Complete Today (P3)', p4:'Not Urgent (P4)' };
+function priorityOptionsHtml(current) {
+  return Object.keys(PRIORITY_LABELS).map(k => `<option value="${k}" ${k === current ? 'selected' : ''}>${PRIORITY_LABELS[k]}</option>`).join('');
+}
+
+const STATUS_LABELS = { 'not-started':'Not started', 'in-progress':'In progress', 'blocked':'Blocked', 'done':'Done' };
+const STATUS_CYCLE  = { 'not-started':'in-progress', 'in-progress':'blocked', 'blocked':'done', 'done':'not-started' };
+
+const KPI_META = {
+  p1:      { title: 'Due today',                     filter: t => !t.done && t.date === fmtDate(new Date()) },
+  overdue: { title: 'Overdue — P1',                  filter: t => !t.done && effectivePriority(t) === 'p1' },
+  open:    { title: 'In progress — all open items',  filter: t => !t.done },
+  done:    { title: 'Done today',                    filter: t => t.done },
+};
+
+const DEFAULT_TASKS = {
+  fin: [
+    { id:'fin1', title:'Branch 3 (QDMS-LP): July numbers not submitted', meta:'3 days overdue · Send reminder to branch manager today', priority:'p1', done:false, notes:'' },
+    { id:'fin2', title:'Branch 2 (QDMS-AL): Supplies variance +P42K vs budget', meta:'Review before approving any new purchase orders', priority:'p1', done:false, notes:'' },
+    { id:'fin3', title:'QP: Monthly report received — needs review', meta:'Revenue P393K vs P450K target · flag shortfall', priority:'p2', done:false, notes:'' },
+    { id:'fin4', title:'QDMS-SP: June P&L reviewed and filed', meta:'Completed Monday · No action needed', priority:'p4', done:true, notes:'' },
+    { id:'fin5', title:'Branch 4 & 5 pre-opening cost tracker', meta:'Monitor only · Capex at 67% of budget', priority:'p4', done:false, notes:'' },
+  ],
+  pay: [
+    { id:'pay1', title:'Supplier invoice #2024-441 — P38,500 · 5 days overdue', meta:'Reagent supplier · Pay today to avoid supply disruption', priority:'p1', done:false, notes:'' },
+    { id:'pay2', title:'Monthly partner debt repayment — P700,000', meta:'Due Friday · Confirm cash position before releasing', priority:'p2', done:false, notes:'' },
+    { id:'pay3', title:'QDMS-SP rent — P74,320 · Due end of week', meta:'Auto-schedule from operations account', priority:'p2', done:false, notes:'' },
+    { id:'pay4', title:'Professional fees (3 branches) — P27,002 total', meta:'Bundle and pay in one transfer on Thursday', priority:'p2', done:false, notes:'' },
+    { id:'pay5', title:'Review full payables queue — P8.4M in pipeline', meta:'Priority: payroll > suppliers > rent > other · Block 30 min Wednesday', priority:'p3', done:false, notes:'' },
+  ],
+  ops: [
+    { id:'ops1', title:'Branch 3: Medical technologist absent — no cover arranged', meta:'3 tests delayed · Call branch head now · Arrange relief from QDMS-SP or temp agency', priority:'p1', done:false, notes:'' },
+    { id:'ops2', title:'Branch 3 turnaround: Month 3 — not on breakeven trajectory', meta:'Revenue P180K vs P350K target · 6-month gate decision required this week', priority:'p1', done:false, notes:'' },
+    { id:'ops3', title:'QDMS-LP: Reagent supply low — 4-day buffer remaining', meta:'Reorder today · Confirm supplier ETA before end of day', priority:'p2', done:false, notes:'' },
+    { id:'ops4', title:'QDMS-SP: Hematology analyzer intermittent error', meta:'Log with biomedical engineer · Preventive maintenance overdue by 2 weeks', priority:'p2', done:false, notes:'' },
+    { id:'ops5', title:'Branch 4: Phlebotomist position open — post JD', meta:'Post to JobStreet and via network this week · Interview target: 2 weeks', priority:'p3', done:false, notes:'' },
+    { id:'ops6', title:'Monthly ops log: compile branch incident summary', meta:'Pull from WhatsApp and tracker · Due at Friday company review', priority:'p3', done:false, notes:'' },
+    { id:'ops7', title:'Branch 2: YAKAP patient volume monitoring', meta:'Week 3 post-accreditation · Volume up 12% · On track', priority:'p4', done:false, notes:'' },
+  ],
+  email: [
+    { id:'em1', title:'Investor inquiry — response overdue by 48h', meta:'Re: branch expansion update · Draft reply using investor update template', priority:'p1', done:false, notes:'' },
+    { id:'em2', title:'DBP loan inquiry: documentation requirements', meta:'Request received Monday · Gather docs and reply by Wednesday', priority:'p2', done:false, notes:'' },
+    { id:'em3', title:'Branch 4 JV partner: profit share calculation query', meta:'Routine question · Pull from tracker and reply today', priority:'p2', done:false, notes:'' },
+    { id:'em4', title:'Follow up: SEC Holdings Co. filing status', meta:'No response in 10 days · Call or email · Log in legal tracker', priority:'p3', done:false, notes:'' },
+    { id:'em5', title:'PhilHealth YAKAP accreditation — Branch 2 status check', meta:'Application submitted 3 weeks ago · Follow up with PhilHealth office', priority:'p3', done:false, notes:'' },
+  ],
+  dev: [
+    { id:'dev1', title:'Branch 5: Fit-out contractor site walk — Wednesday 10am', meta:'Confirm attendance · Bring fit-out checklist and branch spec sheet', priority:'p2', done:false, notes:'' },
+    { id:'dev2', title:'Branch 6 site assessment — 2 candidate locations', meta:'No decision needed yet · Site visit scheduled next week', priority:'p4', done:false, notes:'' },
+  ],
+  legal: [
+    { id:'legal1', title:'Branch 4: Barangay business permit renewal — deadline this Friday', meta:'Documents ready · Submit in person or via liaison this week', priority:'p1', done:false, notes:'' },
+    { id:'legal2', title:'Holdings Co. SEC registration — awaiting certificate', meta:'Filed · Follow up with SEC — see email desk', priority:'p3', done:false, notes:'' },
+    { id:'legal3', title:'Branch 4: FDA LTO application — documents to compile', meta:'Not yet started · Block 2 hours this week · Use FDA checklist template', priority:'p3', done:false, notes:'' },
+  ],
+  mkt: [
+    { id:'mkt1', title:'Approve: World Breastfeeding Week post — Qualitech Diagnostic', meta:'Designer submitted yesterday · Approve or request revision today', priority:'p1', done:false, notes:'' },
+    { id:'mkt2', title:'Approve: Qualitech PH institutional post — branch milestone', meta:'Minor copy tweak needed on tagline', priority:'p2', done:false, notes:'' },
+    { id:'mkt3', title:'Write brief: August Reel #3 — Lab tour / behind the scenes', meta:'Send to designer by Thursday so reel is ready for weekend', priority:'p2', done:false, notes:'' },
+    { id:'mkt4', title:'August content calendar — finalize week 3 & 4', meta:'Weeks 1–2 already scheduled · Complete planning this week', priority:'p3', done:false, notes:'' },
+    { id:'mkt5', title:'July engagement metrics — both accounts', meta:'No action needed · Review at Friday company review', priority:'p4', done:false, notes:'' },
+  ],
+  report: [
+    { id:'rep1', title:'Q2 partner financial update — due in 14 days', meta:'Template in Drive · Pull numbers from financial and ops tracker this Friday', priority:'p2', done:false, notes:'' },
+    { id:'rep2', title:'Monthly company scorecard — July', meta:'Fill last Friday of month · 1 page: revenue, ops status, debt position, branch health', priority:'p3', done:false, notes:'' },
+    { id:'rep3', title:'Branch 3 turnaround: Month 3 gate review', meta:'Revenue not on trajectory · Decision: extend, restructure, or close · See ops desk', priority:'p3', done:false, notes:'' },
+    { id:'rep4', title:'Debt repayment tracker — update monthly', meta:'Current: P162M remaining · Next update after Friday payment', priority:'p4', done:false, notes:'' },
+    { id:'rep5', title:'Regulatory calendar — August deadlines', meta:'All logged in Google Calendar · No new items this week', priority:'p4', done:false, notes:'' },
+  ],
+};
+
+// ── STATE ──────────────────────────────────────────────────────────────────────
+
+const STORE_KEY = 'qualitech_dashboard_v2';
+
+function normalizeTask(t) {
+  if (t.date === undefined) t.date = '';
+  if (t.status === undefined) t.status = t.done ? 'done' : 'not-started';
+  if (t.link === undefined) t.link = '';
+  return t;
+}
+
+function freshDefaultState() {
+  const desks = JSON.parse(JSON.stringify(DEFAULT_TASKS));
+  Object.keys(desks).forEach(k => desks[k].forEach(normalizeTask));
+  return { desks, meetings: [], docLinks: [], notes: [], morningCheck: { date: '', desks: [] } };
+}
+
+// One-time migration: browsers with data saved before the "Legal and
+// Administrative" desk existed keep their permit/SEC/FDA tasks under the
+// old "Branch dev & legal" (dev) desk, filed under ids dev1/dev3/dev4.
+function migrateLegalDesk(parsed) {
+  if (!parsed.desks.dev || parsed.desks.legal) return;
+  const legacyLegalIds = ['dev1', 'dev3', 'dev4'];
+  const migrated = [];
+  parsed.desks.dev = parsed.desks.dev.filter(t => {
+    if (legacyLegalIds.includes(t.id)) { migrated.push(t); return false; }
+    return true;
+  });
+  parsed.desks.legal = migrated.length > 0 ? migrated : JSON.parse(JSON.stringify(DEFAULT_TASKS.legal || []));
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (!parsed.desks) parsed.desks = {};
+      migrateLegalDesk(parsed);
+      DESKS.forEach(d => {
+        if (!parsed.desks[d.id]) parsed.desks[d.id] = JSON.parse(JSON.stringify(DEFAULT_TASKS[d.id] || []));
+      });
+      Object.keys(parsed.desks).forEach(k => parsed.desks[k].forEach(normalizeTask));
+      if (!parsed.meetings) parsed.meetings = [];
+      if (!parsed.docLinks) parsed.docLinks = [];
+      if (!parsed.notes) parsed.notes = [];
+      if (!parsed.morningCheck) parsed.morningCheck = { date: '', desks: [] };
+      return parsed;
+    }
+  } catch(e) {}
+  return freshDefaultState();
+}
+
+function saveState() {
+  localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  scheduleCloudSync();
+}
+
+let state = loadState();
+let activeView = 'overview';       // 'overview' | 'calendar' | 'notes' | 'links' | a desk id
+let calYear = new Date().getFullYear();
+let calMonth = new Date().getMonth();
+let currentNoteId = null;          // id of the note entry currently open in the editor
+let notesFilterDesk = null;        // null = all desks
+let notesSearchQuery = '';
+let doneSectionExpanded = false;
+
+// The due date always wins over whatever priority was manually set: an open
+// task past its due date is Overdue (p1); an open task due today is Urgent
+// (p2). This doesn't touch the stored t.priority, so it reverts
+// automatically if the date is pushed forward or cleared.
+function effectivePriority(t) {
+  if (t.done || !t.date) return t.priority;
+  const today = fmtDate(new Date());
+  if (t.date < today) return 'p1';
+  if (t.date === today) return 'p2';
+  return t.priority;
+}
+
+// ── KPIs ───────────────────────────────────────────────────────────────────────
+
+function computeKpis() {
+  let dueToday=0, overdue=0, open=0, done=0;
+  const today = fmtDate(new Date());
+  DESKS.forEach(d => {
+    const tasks = state.desks[d.id] || [];
+    tasks.forEach(t => {
+      if (t.done) { done++; return; }
+      if (t.date === today) dueToday++;
+      if (effectivePriority(t) === 'p1') overdue++;
+      open++;
+    });
+  });
+  document.getElementById('kpi-p1').textContent = dueToday;
+  document.getElementById('kpi-overdue').textContent = overdue;
+  document.getElementById('kpi-open').textContent = open;
+  document.getElementById('kpi-done').textContent = done;
+}
+
+function deskUrgency(deskId) {
+  const tasks = (state.desks[deskId] || []).filter(t => !t.done);
+  if (tasks.some(t => effectivePriority(t) === 'p1')) return 'p1';
+  if (tasks.some(t => effectivePriority(t) === 'p2')) return 'p2';
+  return tasks.length > 0 ? 'ok' : 'empty';
+}
+
+function deskOpenCount(deskId) {
+  return (state.desks[deskId] || []).filter(t => !t.done).length;
+}
+
+// ── KPI MODAL ──────────────────────────────────────────────────────────────────
+
+function openKpiModal(key) {
+  const meta = KPI_META[key];
+  const items = [];
+  DESKS.forEach(d => { (state.desks[d.id] || []).forEach(t => { if (meta.filter(t)) items.push({ t, d }); }); });
+
+  let html = `
+    <div class="modal-overlay" onclick="if(event.target===this) closeModal()">
+      <div class="modal-panel">
+        <div class="modal-header">
+          <div class="modal-title">${meta.title} <span style="color:var(--muted);font-weight:400">(${items.length})</span></div>
+          <button class="delete-btn" style="opacity:1" onclick="closeModal()">✕</button>
+        </div>
+        <div class="modal-list">`;
+
+  if (items.length === 0) {
+    html += `<div class="empty-state"><div class="empty-icon">✓</div><div class="empty-text">Nothing here.</div></div>`;
+  } else {
+    items.forEach(({t, d}) => {
+      html += `
+        <div class="modal-item" onclick="closeModal(); switchView('${d.id}')">
+          <div class="priority-btn ${effectivePriority(t)}" style="pointer-events:none">${PRIORITY_LABELS[effectivePriority(t)]}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:10px;color:var(--muted);font-weight:600">${d.icon} ${d.name}</div>
+            <div style="font-size:13px;color:var(--text)">${escHtml(t.title)}</div>
+          </div>
+        </div>`;
+    });
+  }
+
+  html += `</div></div></div>`;
+  document.getElementById('modal-root').innerHTML = html;
+}
+
+function closeModal() {
+  document.getElementById('modal-root').innerHTML = '';
+}
+
+// ── GLOBAL SEARCH ──────────────────────────────────────────────────────────────
+
+function searchTasks(query) {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  return allTasksFlat().filter(({t}) =>
+    (t.title || '').toLowerCase().includes(q) ||
+    (t.meta || '').toLowerCase().includes(q) ||
+    (t.notes || '').toLowerCase().includes(q)
+  );
+}
+
+function openSearchModal() {
+  const html = `
+    <div class="modal-overlay" onclick="if(event.target===this) closeModal()">
+      <div class="modal-panel">
+        <div class="modal-header">
+          <div class="modal-title">Search tasks</div>
+          <button class="delete-btn" style="opacity:1" onclick="closeModal()">✕</button>
+        </div>
+        <div style="padding:12px 18px 0">
+          <input type="text" id="search-input" class="add-input"
+            style="border:1px solid var(--border-strong);border-radius:7px;padding:8px 10px;width:100%"
+            placeholder="Search by title, description, or notes…"
+            oninput="renderSearchResults(this.value)">
+        </div>
+        <div class="modal-list" id="search-results"></div>
+      </div>
+    </div>`;
+  document.getElementById('modal-root').innerHTML = html;
+  renderSearchResults('');
+  const input = document.getElementById('search-input');
+  setTimeout(() => { if (input) input.focus(); }, 50);
+}
+
+function renderSearchResults(query) {
+  const container = document.getElementById('search-results');
+  if (!container) return;
+  const q = query.trim();
+  if (!q) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">🔎</div><div class="empty-text">Start typing to search tasks across every desk.</div></div>`;
+    return;
+  }
+  const results = searchTasks(q);
+  if (results.length === 0) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">∅</div><div class="empty-text">No tasks match "${escHtml(q)}".</div></div>`;
+    return;
+  }
+  container.innerHTML = results.map(({t, d}) => `
+    <div class="modal-item" onclick="closeModal(); switchView('${d.id}')">
+      <div class="priority-btn ${effectivePriority(t)}" style="pointer-events:none">${PRIORITY_LABELS[effectivePriority(t)]}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:10px;color:var(--muted);font-weight:600">${d.icon} ${d.name}${t.done ? ' · Done' : ''}</div>
+        <div style="font-size:13px;color:var(--text)">${escHtml(t.title)}</div>
+      </div>
+    </div>`).join('');
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key !== '/') return;
+  const tag = (e.target && e.target.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || (e.target && e.target.isContentEditable)) return;
+  if (document.getElementById('search-input')) return;
+  e.preventDefault();
+  openSearchModal();
+});
+
+// Non-blocking replacements for confirm()/alert()/prompt(). Native dialogs
+// pause the main thread until the user responds, which shows up as a long
+// "blocked" event handler (and a bad INP score) for however long the user
+// takes to read and click — a modal that just waits for a later click
+// doesn't have that problem, since the original event handler returns
+// immediately.
+function showConfirmModal(message, onConfirm, opts) {
+  opts = opts || {};
+  const html = `
+    <div class="modal-overlay" onclick="if(event.target===this) closeModal()">
+      <div class="modal-panel" style="max-width:360px">
+        <div class="modal-header">
+          <div class="modal-title">${opts.title ? escHtml(opts.title) : 'Please confirm'}</div>
+          <button class="delete-btn" style="opacity:1" onclick="closeModal()">✕</button>
+        </div>
+        <div style="padding:16px 18px">
+          <div style="font-size:13px;color:var(--text-2);margin-bottom:16px;line-height:1.5">${escHtml(message)}</div>
+          <div style="display:flex;gap:8px;justify-content:flex-end">
+            <button class="btn" onclick="closeModal()">Cancel</button>
+            <button class="btn ${opts.danger === false ? 'btn-primary' : 'btn-danger'}" id="modal-confirm-btn">${opts.confirmLabel ? escHtml(opts.confirmLabel) : 'Confirm'}</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modal-root').innerHTML = html;
+  document.getElementById('modal-confirm-btn').onclick = () => { closeModal(); onConfirm(); };
+}
+
+function showAlertModal(message, opts) {
+  opts = opts || {};
+  const html = `
+    <div class="modal-overlay" onclick="if(event.target===this) closeModal()">
+      <div class="modal-panel" style="max-width:360px">
+        <div class="modal-header">
+          <div class="modal-title">${opts.title ? escHtml(opts.title) : 'Notice'}</div>
+          <button class="delete-btn" style="opacity:1" onclick="closeModal()">✕</button>
+        </div>
+        <div style="padding:16px 18px">
+          <div style="font-size:13px;color:var(--text-2);margin-bottom:16px;line-height:1.5">${escHtml(message)}</div>
+          <button class="btn btn-primary" style="width:100%" onclick="closeModal()">OK</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modal-root').innerHTML = html;
+}
+
+function showPromptModal(title, message, onSubmit, opts) {
+  opts = opts || {};
+  const html = `
+    <div class="modal-overlay" onclick="if(event.target===this) closeModal()">
+      <div class="modal-panel" style="max-width:360px">
+        <div class="modal-header">
+          <div class="modal-title">${escHtml(title)}</div>
+          <button class="delete-btn" style="opacity:1" onclick="closeModal()">✕</button>
+        </div>
+        <div style="padding:16px 18px">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:10px">${escHtml(message)}</div>
+          <input type="${opts.inputType || 'text'}" id="modal-prompt-input" class="add-input"
+            style="border:1px solid var(--border-strong);border-radius:7px;padding:8px 10px;width:100%;margin-bottom:10px"
+            ${opts.maxlength ? `maxlength="${opts.maxlength}"` : ''}
+            onkeydown="if(event.key==='Enter') document.getElementById('modal-prompt-submit').click()">
+          <button class="btn btn-primary" style="width:100%" id="modal-prompt-submit">${opts.submitLabel ? escHtml(opts.submitLabel) : 'Submit'}</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modal-root').innerHTML = html;
+  const input = document.getElementById('modal-prompt-input');
+  setTimeout(() => { if (input) input.focus(); }, 50);
+  document.getElementById('modal-prompt-submit').onclick = () => {
+    const val = input ? input.value : '';
+    closeModal();
+    onSubmit(val);
+  };
+}
+
+// ── NAV ────────────────────────────────────────────────────────────────────────
+
+function renderNav() {
+  const nav = document.getElementById('rail-nav-content');
+  let html = `
+    <div class="rail-section-label" style="padding-top:16px">Dashboard</div>
+    <button class="desk-btn ${activeView==='overview' ? 'active' : ''}" onclick="switchView('overview')">
+      <div class="desk-icon" style="background:#EEF3FB;color:#1B3A6B">🏢</div>
+      <div class="desk-info"><div class="desk-name-text">Overview</div></div>
+    </button>
+    <button class="desk-btn ${activeView==='calendar' ? 'active' : ''}" onclick="switchView('calendar')">
+      <div class="desk-icon" style="background:#EEF8F3;color:#1A7A4A">🗓️</div>
+      <div class="desk-info"><div class="desk-name-text">Calendar</div></div>
+    </button>
+    <button class="desk-btn ${activeView==='notes' ? 'active' : ''}" onclick="switchView('notes')">
+      <div class="desk-icon" style="background:#FEF6E9;color:#A9720C">📝</div>
+      <div class="desk-info"><div class="desk-name-text">Notes</div></div>
+    </button>
+    <div class="rail-section-label">Desks</div>`;
+
+  DESKS.forEach(d => {
+    const urg = deskUrgency(d.id);
+    const count = deskOpenCount(d.id);
+    const countCls = urg === 'p1' ? 'has-p1' : urg === 'p2' ? 'has-p2' : urg === 'ok' ? 'none' : 'empty';
+    html += `
+      <button class="desk-btn ${d.id === activeView ? 'active' : ''}" onclick="switchView('${d.id}')">
+        <div class="desk-icon" style="background:${d.ic_bg};color:${d.ic_color}">${d.icon}</div>
+        <div class="desk-info">
+          <div class="desk-num">${d.num}</div>
+          <div class="desk-name-text">${d.name}</div>
+        </div>
+        <div class="desk-count ${countCls}">${count}</div>
+      </button>`;
+  });
+
+  html += `
+    <div class="rail-section-label">Resources</div>
+    <button class="desk-btn ${activeView==='links' ? 'active' : ''}" onclick="switchView('links')">
+      <div class="desk-icon" style="background:#F7F8FA;color:#4A5568">🔗</div>
+      <div class="desk-info"><div class="desk-name-text">Document links</div></div>
+    </button>`;
+
+  nav.innerHTML = html;
+}
+
+function switchView(id) {
+  activeView = id;
+  doneSectionExpanded = false;
+  renderNav();
+  renderMain();
+  closeRailMobile();
+}
+
+function toggleDoneExpanded() {
+  doneSectionExpanded = !doneSectionExpanded;
+  renderAll();
+}
+
+function toggleRail() {
+  const rail = document.querySelector('.rail');
+  const backdrop = document.querySelector('.rail-backdrop');
+  if (rail) rail.classList.toggle('open');
+  if (backdrop) backdrop.classList.toggle('open');
+}
+
+function closeRailMobile() {
+  const rail = document.querySelector('.rail');
+  const backdrop = document.querySelector('.rail-backdrop');
+  if (rail) rail.classList.remove('open');
+  if (backdrop) backdrop.classList.remove('open');
+}
+
+// ── MAIN DISPATCH ──────────────────────────────────────────────────────────────
+
+function renderMain() {
+  if (activeView === 'overview') { renderOverviewMain(); return; }
+  if (activeView === 'calendar') { renderCalendarMain(); return; }
+  if (activeView === 'notes') { renderNotesMain(); return; }
+  if (activeView === 'links') { renderLinksMain(); return; }
+  renderDeskMain();
+}
+
+// ── OVERVIEW ───────────────────────────────────────────────────────────────────
+
+const PRIORITY_CHART_COLORS = { p1: '#E74C3C', p2: '#F0C419', p3: '#9B59B6', p4: '#CBD5E0' };
+
+function renderProductivityCharts() {
+  const allTasks = allTasksFlat();
+  const openTasks = allTasks.filter(x => !x.t.done);
+  const totalCount = allTasks.length;
+  const doneCount = totalCount - openTasks.length;
+  const completionPct = totalCount ? Math.round((doneCount / totalCount) * 100) : 0;
+
+  const priorityCounts = { p1: 0, p2: 0, p3: 0, p4: 0 };
+  openTasks.forEach(({ t }) => { priorityCounts[effectivePriority(t)]++; });
+  const openTotal = openTasks.length;
+
+  const deskLoad = DESKS.map(d => ({ d, open: (state.desks[d.id] || []).filter(t => !t.done).length }))
+    .sort((a, b) => b.open - a.open);
+  const maxDeskOpen = Math.max(1, ...deskLoad.map(x => x.open));
+
+  const segmentsHtml = openTotal === 0
+    ? `<div style="flex:1;background:var(--border)"></div>`
+    : ['p1', 'p2', 'p3', 'p4'].filter(k => priorityCounts[k] > 0).map(k =>
+        `<div style="flex:${priorityCounts[k]};background:${PRIORITY_CHART_COLORS[k]}" title="${PRIORITY_LABELS[k]}: ${priorityCounts[k]}"></div>`
+      ).join(`<div style="width:2px;background:var(--surface);flex-shrink:0"></div>`);
+
+  const legendHtml = ['p1', 'p2', 'p3', 'p4'].map(k => `
+    <span class="prod-legend-item">
+      <span class="prod-legend-swatch" style="background:${PRIORITY_CHART_COLORS[k]}"></span>
+      ${PRIORITY_LABELS[k]} — ${priorityCounts[k]}
+    </span>`).join('');
+
+  const deskBarsHtml = deskLoad.map(({ d, open }) => `
+    <div class="prod-bar-row">
+      <div class="prod-bar-label">${d.icon} ${escHtml(d.name)}</div>
+      <div class="prod-bar-track"><div class="prod-bar-fill" style="width:${maxDeskOpen ? (open / maxDeskOpen * 100) : 0}%"></div></div>
+      <div class="prod-bar-value">${open}</div>
+    </div>`).join('');
+
+  return `
+    <div class="section-divider">
+      <span class="section-divider-label">Productivity snapshot</span>
+      <div class="section-divider-line"></div>
+    </div>
+    <div class="prod-grid">
+      <div class="prod-card">
+        <div class="prod-card-title">Completion rate</div>
+        <div class="prod-meter-row">
+          <div class="prod-meter-track"><div class="prod-meter-fill" style="width:${completionPct}%"></div></div>
+          <div class="prod-meter-value">${completionPct}%</div>
+        </div>
+        <div class="prod-card-sub">${doneCount} of ${totalCount} tasks completed</div>
+      </div>
+      <div class="prod-card">
+        <div class="prod-card-title">Open task mix by priority</div>
+        <div class="prod-stack">${segmentsHtml}</div>
+        <div class="prod-legend">${legendHtml}</div>
+      </div>
+      <div class="prod-card prod-card-wide">
+        <div class="prod-card-title">Open tasks by desk</div>
+        <div class="prod-bars">${deskBarsHtml}</div>
+      </div>
+    </div>`;
+}
+
+function ensureMorningCheckFresh() {
+  const today = fmtDate(new Date());
+  if (state.morningCheck.date !== today) {
+    state.morningCheck = { date: today, desks: [] };
+    saveState();
+  }
+}
+
+function toggleMorningCheck(deskId) {
+  ensureMorningCheckFresh();
+  const i = state.morningCheck.desks.indexOf(deskId);
+  if (i === -1) state.morningCheck.desks.push(deskId); else state.morningCheck.desks.splice(i, 1);
+  saveState();
+  renderOverviewMain();
+}
+
+function resetMorningChecklist() {
+  showConfirmModal("Reset today's morning checklist? This only clears your review progress, not any task data.", () => {
+    state.morningCheck = { date: fmtDate(new Date()), desks: [] };
+    saveState();
+    renderOverviewMain();
+  }, { danger: false, confirmLabel: 'Reset' });
+}
+
+function renderMorningChecklist() {
+  ensureMorningCheckFresh();
+  const checkedSet = new Set(state.morningCheck.desks);
+  const checkedCount = DESKS.filter(d => checkedSet.has(d.id)).length;
+  const pct = DESKS.length ? Math.round((checkedCount / DESKS.length) * 100) : 0;
+
+  const itemsHtml = DESKS.map(d => {
+    const tasks = state.desks[d.id] || [];
+    const open = tasks.filter(t => !t.done);
+    const overdueCount = open.filter(t => effectivePriority(t) === 'p1').length;
+    const checked = checkedSet.has(d.id);
+    return `
+      <div class="checklist-item ${checked ? 'checked' : ''}" onclick="toggleMorningCheck('${d.id}')">
+        <div class="task-check ${checked ? 'checked' : ''}"></div>
+        <div class="desk-icon" style="background:${d.ic_bg};color:${d.ic_color}">${d.icon}</div>
+        <div class="checklist-label">${escHtml(d.name)}</div>
+        <div class="checklist-sub">${open.length} open${overdueCount > 0 ? ` · ${overdueCount} overdue` : ''}</div>
+        <button class="btn" onclick="event.stopPropagation(); switchView('${d.id}')">Review →</button>
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="checklist-card">
+      <div class="checklist-header">
+        <div class="checklist-title">☀️ Morning checklist — ${checkedCount} of ${DESKS.length} desks reviewed</div>
+        <button class="btn" style="font-size:11px;padding:4px 8px" onclick="resetMorningChecklist()">Reset</button>
+      </div>
+      <div class="checklist-track"><div class="checklist-fill" style="width:${pct}%"></div></div>
+      ${itemsHtml}
+    </div>`;
+}
+
+function renderOverviewMain() {
+  let html = `
+    <div class="desk-header">
+      <div class="desk-title-area">
+        <div class="desk-title">🏢 Company overview</div>
+        <div class="desk-desc">Aggregate snapshot across all desks — start here each morning.</div>
+      </div>
+    </div>`;
+
+  html += renderMorningChecklist();
+
+  html += `<div class="ov-grid">`;
+
+  DESKS.forEach(d => {
+    const tasks = state.desks[d.id] || [];
+    const open = tasks.filter(t => !t.done);
+    const p1 = open.filter(t => effectivePriority(t) === 'p1').length;
+    const p2 = open.filter(t => effectivePriority(t) === 'p2').length;
+    html += `
+      <div class="ov-card" onclick="switchView('${d.id}')">
+        <div class="ov-card-top">
+          <div class="desk-icon" style="background:${d.ic_bg};color:${d.ic_color}">${d.icon}</div>
+          <div>
+            <div class="ov-card-title">${d.name}</div>
+            <div class="ov-card-sub">${open.length} open</div>
+          </div>
+        </div>
+        <div class="ov-card-counts">
+          ${p1 > 0 ? `<span class="ov-pill p1">${p1} P1</span>` : ''}
+          ${p2 > 0 ? `<span class="ov-pill p2">${p2} P2</span>` : ''}
+          ${p1 === 0 && p2 === 0 ? `<span class="ov-pill ok">Clear</span>` : ''}
+        </div>
+      </div>`;
+  });
+  html += `</div>`;
+
+  html += renderProductivityCharts();
+
+  const today = fmtDate(new Date());
+  const decisionItems = [];
+  DESKS.forEach(d => { (state.desks[d.id] || []).forEach(t => {
+    if (!t.done && (effectivePriority(t) === 'p1' || t.date === today)) decisionItems.push({ t, d });
+  }); });
+  decisionItems.sort((a, b) => (effectivePriority(a.t) === 'p1' ? 0 : 1) - (effectivePriority(b.t) === 'p1' ? 0 : 1));
+
+  html += `
+    <div class="section-divider">
+      <span class="section-divider-label">Needs a decision today — overdue &amp; due today, all desks</span>
+      <div class="section-divider-line"></div>
+    </div>`;
+
+  if (decisionItems.length === 0) {
+    html += `<div class="empty-state"><div class="empty-icon">✓</div><div class="empty-text">Nothing overdue or due today. Good morning.</div></div>`;
+  } else {
+    html += `<div class="tasks-list">`;
+    decisionItems.forEach(({t, d}) => {
+      html += `
+        <div class="task-card ${effectivePriority(t)}" style="cursor:pointer" onclick="switchView('${d.id}')">
+          <div class="task-main">
+            <div class="task-check" onclick="event.stopPropagation(); toggleDone('${t.id}')"></div>
+            <div class="task-body">
+              <div style="font-size:10px;color:var(--muted);font-weight:600;margin-bottom:2px">${d.icon} ${d.name}</div>
+              <div style="font-size:13px;font-weight:500">${escHtml(t.title)}</div>
+              ${t.meta ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">${escHtml(t.meta)}</div>` : ''}
+            </div>
+          </div>
+        </div>`;
+    });
+    html += `</div>`;
+  }
+
+  document.getElementById('main-content').innerHTML = html;
+}
+
+// ── DESK MAIN ──────────────────────────────────────────────────────────────────
+
+function renderDeskMain() {
+  const desk = DESKS.find(d => d.id === activeView);
+  const tasks = state.desks[activeView] || [];
+  const open = tasks.filter(t => !t.done);
+  const done = tasks.filter(t => t.done);
+
+  const openByP = {
+    p1: open.filter(t => effectivePriority(t) === 'p1'),
+    p2: open.filter(t => effectivePriority(t) === 'p2'),
+    p3: open.filter(t => effectivePriority(t) === 'p3'),
+    p4: open.filter(t => effectivePriority(t) === 'p4'),
+  };
+
+  let html = `
+    <div class="desk-header">
+      <div class="desk-title-area">
+        <div class="desk-title">${desk.icon} ${desk.name}</div>
+        <div class="desk-desc">${desk.sub}</div>
+      </div>
+      <div class="desk-actions">
+        ${done.length > 0 ? `<button class="btn btn-danger" onclick="clearDone()">Clear ${done.length} done</button>` : ''}
+        <button class="btn" onclick="resetDesk()">Reset desk</button>
+      </div>
+    </div>
+
+    <div class="add-task-area" onclick="document.getElementById('add-input-${activeView}').focus()">
+      <div class="add-icon">+</div>
+      <input class="add-input" id="add-input-${activeView}" placeholder="Add a task… press Enter to save" style="flex:2"
+        onkeydown="handleAddKey(event, '${activeView}')">
+      <input class="add-input" id="add-link-${activeView}" type="url" placeholder="Link (optional)" style="flex:1"
+        onclick="event.stopPropagation()" onkeydown="handleAddKey(event, '${activeView}')">
+      <select class="add-priority-select" id="add-priority-${activeView}" onclick="event.stopPropagation()">${priorityOptionsHtml('p2')}</select>
+      <button class="btn btn-primary" onclick="event.stopPropagation(); addTask('${activeView}')">＋ Add</button>
+    </div>
+
+    <div class="tasks-list" id="tasks-list">`;
+
+  const sections = [
+    { key:'p1', label: PRIORITY_LABELS.p1, tasks: openByP.p1 },
+    { key:'p2', label: PRIORITY_LABELS.p2, tasks: openByP.p2 },
+    { key:'p3', label: PRIORITY_LABELS.p3, tasks: openByP.p3 },
+    { key:'p4', label: PRIORITY_LABELS.p4, tasks: openByP.p4 },
+  ];
+
+  let anySections = false;
+  sections.forEach(s => {
+    if (s.tasks.length === 0) return;
+    anySections = true;
+    html += `
+      <div class="section-divider">
+        <span class="section-divider-label">${s.label}</span>
+        <div class="section-divider-line"></div>
+      </div>`;
+    s.tasks.forEach(t => { html += taskCardHTML(t); });
+  });
+
+  if (done.length > 0) {
+    const COLLAPSE_AT = 10;
+    const showAll = doneSectionExpanded || done.length <= COLLAPSE_AT;
+    const visibleDone = showAll ? done : done.slice(0, COLLAPSE_AT);
+    html += `
+      <div class="section-divider">
+        <span class="section-divider-label">Tasks Completed (${done.length})</span>
+        <div class="section-divider-line"></div>
+      </div>`;
+    visibleDone.forEach(t => { html += taskCardHTML(t); });
+    if (done.length > COLLAPSE_AT) {
+      html += `<button class="btn" style="width:100%;margin-top:6px" onclick="toggleDoneExpanded()">${showAll ? 'Show fewer' : `Show ${done.length - COLLAPSE_AT} more completed`}</button>`;
+    }
+  }
+
+  if (!anySections && done.length === 0) {
+    html += `
+      <div class="empty-state">
+        <div class="empty-icon">✓</div>
+        <div class="empty-text">All clear — add items above as they come in.</div>
+      </div>`;
+  }
+
+  html += `</div>`;
+
+  document.getElementById('main-content').innerHTML = html;
+}
+
+function taskCardHTML(t) {
+  return `
+    <div class="task-card ${effectivePriority(t)} ${t.done ? 'done' : ''}" id="card-${t.id}">
+      <div class="task-main">
+        <div class="task-check ${t.done ? 'checked' : ''}" onclick="toggleDone('${t.id}')"></div>
+        <div class="task-body">
+          <div class="task-title-row">
+            <textarea class="task-title-input" rows="1"
+              oninput="autoResize(this); updateField('${t.id}','title',this.value)"
+              onblur="saveAndRender()">${escHtml(t.title)}</textarea>
+          </div>
+          <textarea class="task-meta-input" rows="1" placeholder="Add detail or context…"
+            oninput="autoResize(this); updateField('${t.id}','meta',this.value)"
+            onblur="saveAndRender()">${escHtml(t.meta)}</textarea>
+          <div class="task-toggle-row">
+            <button class="notes-toggle" onclick="toggleNotes('${t.id}')">
+              ${t.notes ? '▾ Notes' : '+ Notes'}
+            </button>
+            ${t.link ? `<a class="notes-toggle task-link-icon" href="${escHtml(t.link)}" target="_blank" rel="noopener" title="${escHtml(t.link)}">🔗 Open link</a>` : ''}
+            <button class="notes-toggle" onclick="toggleLink('${t.id}')">
+              ${t.link ? '✎ Edit link' : '+ Link'}
+            </button>
+          </div>
+        </div>
+        <div class="task-controls">
+          <button class="status-btn ${t.status}" onclick="cycleStatus('${t.id}')" title="Click to change status">${STATUS_LABELS[t.status]}</button>
+          <select class="priority-btn priority-select ${effectivePriority(t)}" ${effectivePriority(t) !== t.priority ? 'title="Past due date — showing as Overdue"' : ''} onchange="updateTaskPriority('${t.id}', this.value)">${priorityOptionsHtml(effectivePriority(t))}</select>
+          <input type="date" class="date-input" value="${t.date || ''}" onchange="updateTaskDate('${t.id}', this.value)" title="Due date">
+          <button class="delete-btn" onclick="deleteTask('${t.id}')" title="Delete task">✕</button>
+        </div>
+      </div>
+      <div class="task-notes-area ${t.notes ? 'open' : ''}" id="notes-area-${t.id}">
+        <textarea class="task-notes" placeholder="Notes, links, context for this item…" rows="2"
+          oninput="autoResize(this); updateField('${t.id}','notes',this.value)"
+          onblur="saveAndRender()">${escHtml(t.notes || '')}</textarea>
+      </div>
+      <div class="task-link-area ${t.link ? 'open' : ''}" id="link-area-${t.id}">
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="url" class="task-link-input" placeholder="https://…" value="${escHtml(t.link || '')}"
+            oninput="updateField('${t.id}','link',this.value)"
+            onblur="saveAndRender()">
+          <button class="delete-btn" style="opacity:1;flex-shrink:0" onclick="clearTaskLink('${t.id}')" title="Remove link">✕</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ── CALENDAR ───────────────────────────────────────────────────────────────────
+
+function allTasksFlat() {
+  const arr = [];
+  DESKS.forEach(d => { (state.desks[d.id] || []).forEach(t => { arr.push({t, d}); }); });
+  return arr;
+}
+
+function fmtDate(dt) {
+  const y = dt.getFullYear(), m = String(dt.getMonth()+1).padStart(2,'0'), d = String(dt.getDate()).padStart(2,'0');
+  return `${y}-${m}-${d}`;
+}
+
+function eventsForDate(dateStr) {
+  const evs = [];
+  allTasksFlat().forEach(({t, d}) => {
+    if (t.date === dateStr && !t.done) evs.push({ type:'task', id:t.id, title:t.title, deskIcon:d.icon, priority:effectivePriority(t) });
+  });
+  (state.meetings || []).forEach(m => {
+    if (m.date === dateStr) evs.push({ type:'meeting', id:m.id, title:m.title, time:m.time });
+  });
+  return evs;
+}
+
+function renderCalendarMain() {
+  const monthNames = MONTH_NAMES;
+  const first = new Date(calYear, calMonth, 1);
+  const startDow = first.getDay();
+  const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+  const todayStr = fmtDate(new Date());
+
+  let cells = '';
+  for (let i=0; i<startDow; i++) cells += `<div class="cal-cell empty"></div>`;
+  for (let day=1; day<=daysInMonth; day++) {
+    const dateStr = fmtDate(new Date(calYear, calMonth, day));
+    const evs = eventsForDate(dateStr);
+    cells += `
+      <div class="cal-cell ${dateStr===todayStr?'today':''}" ondragover="event.preventDefault()" ondrop="handleCalDrop(event,'${dateStr}')">
+        <div class="cal-daynum">${day}</div>
+        <div class="cal-chips">
+          ${evs.map(e => e.type==='task'
+            ? `<div class="cal-chip task ${e.priority}" draggable="true" ondragstart="dragStart(event,'task','${e.id}')" title="${escHtml(e.title)}"><span>${e.deskIcon} ${escHtml(e.title)}</span></div>`
+            : `<div class="cal-chip meeting" draggable="true" ondragstart="dragStart(event,'meeting','${e.id}')" title="${escHtml(e.title)}"><span>🕐 ${e.time ? e.time + ' · ' : ''}${escHtml(e.title)}</span><span class="chip-del" onclick="event.stopPropagation();deleteMeeting('${e.id}')">✕</span></div>`
+          ).join('')}
+        </div>
+      </div>`;
+  }
+
+  const unscheduled = allTasksFlat().filter(({t}) => !t.done && !t.date);
+
+  let html = `
+    <div class="desk-header">
+      <div class="desk-title-area">
+        <div class="desk-title">🗓️ Calendar</div>
+        <div class="desk-desc">Drag any task or meeting onto a date to schedule or reschedule it.</div>
+      </div>
+      <div class="desk-actions">
+        <button class="btn" onclick="shiftMonth(-1)">‹ Prev</button>
+        <div style="font-size:13px;font-weight:600;padding:0 6px;display:flex;align-items:center;min-width:130px;justify-content:center">${monthNames[calMonth]} ${calYear}</div>
+        <button class="btn" onclick="shiftMonth(1)">Next ›</button>
+      </div>
+    </div>
+
+    <div class="section-divider">
+      <span class="section-divider-label">Add a meeting</span>
+      <div class="section-divider-line"></div>
+    </div>
+    <div class="add-task-area" style="cursor:default">
+      <input class="add-input" id="mtg-title" placeholder="Meeting title…" style="flex:2">
+      <input type="date" class="date-input" id="mtg-date" value="${fmtDate(new Date(calYear, calMonth, Math.min(new Date().getDate(), daysInMonth)))}">
+      <input type="time" class="date-input" id="mtg-time">
+      <button class="btn btn-primary" onclick="addMeeting()">Add</button>
+    </div>
+
+    <div class="section-divider">
+      <span class="section-divider-label">Unscheduled tasks — drag onto a date</span>
+      <div class="section-divider-line"></div>
+    </div>
+    <div class="unscheduled-tray">
+      ${unscheduled.length === 0
+        ? `<span style="font-size:12px;color:var(--muted)">Everything's scheduled.</span>`
+        : unscheduled.map(({t,d}) => `<div class="cal-chip task ${t.priority}" draggable="true" ondragstart="dragStart(event,'task','${t.id}')" title="${escHtml(t.title)}"><span>${d.icon} ${escHtml(t.title)}</span></div>`).join('')}
+    </div>
+
+    <div class="cal-scroll">
+      <div class="cal-dow">
+        <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+      </div>
+      <div class="cal-grid">${cells}</div>
+    </div>
+  `;
+
+  document.getElementById('main-content').innerHTML = html;
+}
+
+function shiftMonth(delta) {
+  calMonth += delta;
+  if (calMonth < 0) { calMonth = 11; calYear--; }
+  if (calMonth > 11) { calMonth = 0; calYear++; }
+  renderCalendarMain();
+}
+
+function dragStart(ev, type, id) {
+  ev.dataTransfer.setData('text/plain', JSON.stringify({type, id}));
+}
+
+function handleCalDrop(ev, dateStr) {
+  ev.preventDefault();
+  let data;
+  try { data = JSON.parse(ev.dataTransfer.getData('text/plain')); } catch(e) { return; }
+  if (data.type === 'task') {
+    const t = findTask(data.id);
+    if (t) { t.date = dateStr; saveState(); }
+  } else if (data.type === 'meeting') {
+    const m = (state.meetings || []).find(m => m.id === data.id);
+    if (m) { m.date = dateStr; saveState(); }
+  }
+  // Rescheduling a task can flip its effective priority (e.g. onto/off a
+  // past date), which the top KPI strip and sidebar badges need to reflect.
+  computeKpis();
+  renderNav();
+  renderCalendarMain();
+}
+
+function addMeeting() {
+  const title = document.getElementById('mtg-title').value.trim();
+  const date = document.getElementById('mtg-date').value;
+  const time = document.getElementById('mtg-time').value;
+  if (!title || !date) return;
+  if (!state.meetings) state.meetings = [];
+  state.meetings.push({ id:'mtg_' + Date.now(), title, date, time });
+  saveState();
+  renderCalendarMain();
+}
+
+function deleteMeeting(id) {
+  state.meetings = (state.meetings || []).filter(m => m.id !== id);
+  saveState();
+  renderCalendarMain();
+}
+
+// ── NOTES (DAILY LOG) ────────────────────────────────────────────────────────
+
+// Notes are independent entries (their own id), not one-per-date, so a day
+// can hold several entries for different specific tasks/topics. `date` is
+// only used for grouping/sorting in the outline.
+function findNote(id) {
+  return (state.notes || []).find(n => n.id === id);
+}
+
+function allNotesSorted() {
+  return (state.notes || []).slice().sort((a, b) => {
+    if (a.date !== b.date) return b.date.localeCompare(a.date);
+    return (b.createdAt || '').localeCompare(a.createdAt || '');
+  });
+}
+
+function createNote(dateStr) {
+  const n = {
+    id: 'note_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+    date: dateStr, title: '', html: '', tags: [],
+    createdAt: new Date().toISOString(),
+  };
+  if (!state.notes) state.notes = [];
+  state.notes.push(n);
+  return n;
+}
+
+// Persists whatever's in the editor for the entry we're about to navigate
+// away from. Needed because the nav buttons live outside .notes-editor, so
+// clicking them (while the editable has focus) fires a real blur — and if
+// that blur handler ran its usual full re-render, it would destroy the very
+// button being clicked mid-click. These buttons use onmousedown
+// preventDefault to avoid that blur entirely, so save explicitly instead.
+function finalizeCurrentNote() {
+  const el = document.getElementById('notes-editable');
+  if (el && currentNoteId) updateNoteHtml(currentNoteId, sanitizeNoteHtml(el.innerHTML));
+}
+
+function createNewNote() {
+  finalizeCurrentNote();
+  const n = createNote(fmtDate(new Date()));
+  currentNoteId = n.id;
+  renderNotesMain();
+}
+
+function updateNoteTitle(id, val) {
+  const n = findNote(id);
+  if (!n) return;
+  n.title = val;
+  n.updatedAt = new Date().toISOString();
+  saveState();
+  markNotesDirty();
+}
+
+// Notes created before rich-text formatting only have a plain-text `text`
+// field. Render those through here too so old entries still display.
+function noteBodyHtml(n) {
+  if (!n) return '';
+  if (n.html !== undefined) return n.html;
+  if (n.text) return n.text.split('\n').map(line => `<div>${escHtml(line)}</div>`).join('');
+  return '';
+}
+
+function htmlToPlainText(html) {
+  const doc = new DOMParser().parseFromString(html || '', 'text/html');
+  return (doc.body.textContent || '').replace(/\s+/g, ' ').trim();
+}
+
+// Allowlist sanitizer for note HTML — needed because notes moved from plain
+// text to rich text, so pasted content (which can carry arbitrary markup,
+// including event-handler attributes) must be stripped before it's saved
+// and later re-rendered via innerHTML.
+const NOTE_ALLOWED_TAGS = new Set(['B','I','U','S','STRONG','EM','DIV','SPAN','P','BR','UL','OL','LI','FONT']);
+const NOTE_STRIP_ENTIRELY_TAGS = new Set(['SCRIPT','STYLE','IFRAME','OBJECT','EMBED','NOSCRIPT']);
+const NOTE_ALLOWED_STYLE_PROPS = new Set(['color','background-color','font-family','font-size','font-weight','font-style','text-decoration','text-align']);
+const NOTE_FONT_SIZE_MAP = { '1':'10px','2':'12px','3':'14px','4':'16px','5':'18px','6':'24px','7':'32px' };
+
+function sanitizeNoteHtml(html) {
+  const doc = new DOMParser().parseFromString(html || '', 'text/html');
+  sanitizeNoteNode(doc.body);
+  return doc.body.innerHTML;
+}
+
+function sanitizeNoteNode(node) {
+  Array.from(node.childNodes).forEach(child => {
+    if (child.nodeType === Node.TEXT_NODE) return;
+    if (child.nodeType !== Node.ELEMENT_NODE) { node.removeChild(child); return; }
+    if (NOTE_STRIP_ENTIRELY_TAGS.has(child.tagName)) { node.removeChild(child); return; }
+    if (!NOTE_ALLOWED_TAGS.has(child.tagName)) {
+      while (child.firstChild) node.insertBefore(child.firstChild, child);
+      node.removeChild(child);
+      return;
+    }
+    const styleParts = [];
+    if (child.tagName === 'FONT') {
+      if (child.getAttribute('color')) styleParts.push('color:' + child.getAttribute('color'));
+      if (child.getAttribute('face')) styleParts.push('font-family:' + child.getAttribute('face'));
+      const size = NOTE_FONT_SIZE_MAP[child.getAttribute('size')];
+      if (size) styleParts.push('font-size:' + size);
+    }
+    const existingStyle = child.getAttribute('style') || '';
+    Array.from(child.attributes).forEach(attr => child.removeAttribute(attr.name));
+    const safeDecls = existingStyle.split(';').map(s => s.trim()).filter(Boolean).filter(decl => {
+      const prop = decl.split(':')[0].trim().toLowerCase();
+      return NOTE_ALLOWED_STYLE_PROPS.has(prop);
+    }).concat(styleParts);
+    if (safeDecls.length) child.setAttribute('style', safeDecls.join('; '));
+    sanitizeNoteNode(child);
+  });
+}
+
+function updateNoteHtml(id, html) {
+  const n = findNote(id);
+  if (!n) return;
+  n.html = html;
+  n.updatedAt = new Date().toISOString();
+  saveState();
+}
+
+// Notes autosave under the hood (so nothing is lost), but the user asked for
+// a visible signal of whether the current entry has unsaved edits or is
+// finished, plus an explicit action to mark it done — markNotesDirty() drives
+// the "● Editing…" indicator and saveNoteNow() is the explicit Save button.
+let notesDirty = false;
+
+function markNotesDirty() {
+  notesDirty = true;
+  const label = document.getElementById('notes-saved-label');
+  if (label) { label.textContent = '● Editing…'; label.style.color = 'var(--p2-color)'; }
+  const btn = document.getElementById('notes-save-btn');
+  if (btn) btn.disabled = false;
+}
+
+function saveNoteNow() {
+  const el = document.getElementById('notes-editable');
+  if (el && currentNoteId) updateNoteHtml(currentNoteId, sanitizeNoteHtml(el.innerHTML));
+  notesDirty = false;
+  renderNotesMain();
+}
+
+function onNotesEditableInput() {
+  const el = document.getElementById('notes-editable');
+  if (el && currentNoteId) updateNoteHtml(currentNoteId, el.innerHTML);
+  markNotesDirty();
+}
+
+function onNotesEditableBlur(ev) {
+  // Moving focus anywhere else inside the note editor (the title field, a
+  // tag, a toolbar control) also blurs the editable div. Rebuilding the
+  // whole view here would destroy whatever the user just clicked into
+  // mid-click, so only finalize when focus is actually leaving the editor —
+  // e.g. switching desks/views, which re-render from saved state anyway.
+  //
+  // relatedTarget is also null when this element itself is torn out of the
+  // DOM programmatically (e.g. our own re-render, mid-way through replacing
+  // #main-content, fires a synchronous blur on the outgoing node). Treating
+  // that like "focus left the editor" would save the *stale* pre-rebuild DOM
+  // content under whatever currentNoteId has already been reassigned to by
+  // that same re-render — silently overwriting the new entry with the old
+  // one's text. Window-losing-focus is the same relatedTarget=null shape;
+  // skipping it is fine since oninput already autosaves every keystroke.
+  if (!ev || !ev.relatedTarget) return;
+  if (ev.relatedTarget.closest && ev.relatedTarget.closest('.notes-editor')) return;
+  saveNoteNow();
+}
+
+function onNotesPaste(ev) {
+  ev.preventDefault();
+  const clipboard = ev.clipboardData || window.clipboardData;
+  const html = clipboard.getData('text/html');
+  const text = clipboard.getData('text/plain');
+  const clean = html ? sanitizeNoteHtml(html) : escHtml(text).replace(/\n/g, '<br>');
+  document.execCommand('insertHTML', false, clean);
+  onNotesEditableInput();
+}
+
+function notesBlockAncestor(node) {
+  const editable = document.getElementById('notes-editable');
+  let el = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+  while (el && el !== editable && !['DIV','P','LI'].includes(el.tagName)) el = el.parentElement;
+  return (el && el !== editable) ? el : editable;
+}
+
+// Google Docs-style autoformat: typing "- ", "* ", or "1. " at the start of
+// a line converts it into a bullet/numbered list instead of inserting the
+// space, so lists don't need the toolbar buttons for the common case.
+function onNotesEditableKeydown(ev) {
+  if (ev.key !== ' ') return;
+  const sel = window.getSelection();
+  if (!sel.rangeCount || !sel.getRangeAt(0).collapsed) return;
+  const range = sel.getRangeAt(0);
+  const block = notesBlockAncestor(range.startContainer);
+  const preRange = document.createRange();
+  preRange.selectNodeContents(block);
+  preRange.setEnd(range.startContainer, range.startOffset);
+  const textBefore = preRange.toString();
+
+  const isBullet = /^[-*]$/.test(textBefore);
+  const isNumbered = /^\d+\.$/.test(textBefore);
+  if (!isBullet && !isNumbered) return;
+
+  ev.preventDefault();
+  sel.removeAllRanges();
+  sel.addRange(preRange);
+  document.execCommand('delete');
+  try { document.execCommand('styleWithCSS', false, true); } catch (e) {}
+  document.execCommand(isBullet ? 'insertUnorderedList' : 'insertOrderedList');
+  onNotesEditableInput();
+}
+
+function notesExec(cmd, val) {
+  const el = document.getElementById('notes-editable');
+  if (!el) return;
+  el.focus();
+  try { document.execCommand('styleWithCSS', false, true); } catch (e) {}
+  document.execCommand(cmd, false, val || null);
+  onNotesEditableInput();
+  updateNotesToolbarState();
+}
+
+function setNoteLineSpacing(id, val) {
+  const n = findNote(id);
+  if (!n) return;
+  n.lineSpacing = val;
+  saveState();
+  const el = document.getElementById('notes-editable');
+  if (el) el.style.lineHeight = val;
+}
+
+function setNoteParaSpacing(id, val) {
+  const n = findNote(id);
+  if (!n) return;
+  n.paraSpacing = val;
+  saveState();
+  const editor = document.querySelector('.notes-editor');
+  if (editor) editor.style.setProperty('--p-space', val + 'px');
+}
+
+const NOTES_TOOLBAR_COMMANDS = ['bold','italic','underline','strikeThrough','justifyLeft','justifyCenter','justifyRight','insertUnorderedList','insertOrderedList'];
+
+function updateNotesToolbarState() {
+  const el = document.getElementById('notes-editable');
+  if (!el) return;
+  const sel = window.getSelection();
+  const inside = !!(sel && sel.anchorNode && el.contains(sel.anchorNode));
+  NOTES_TOOLBAR_COMMANDS.forEach(cmd => {
+    const btn = document.querySelector('.notes-toolbar .tb-btn[data-cmd="' + cmd + '"]');
+    if (!btn) return;
+    let active = false;
+    if (inside) { try { active = document.queryCommandState(cmd); } catch (e) {} }
+    btn.classList.toggle('active', active);
+  });
+}
+
+function toggleNoteTag(id, deskId) {
+  const n = findNote(id);
+  if (!n) return;
+  const i = n.tags.indexOf(deskId);
+  if (i === -1) n.tags.push(deskId); else n.tags.splice(i, 1);
+  n.updatedAt = new Date().toISOString();
+  saveState();
+  renderNotesMain();
+}
+
+function deleteNote(id) {
+  showConfirmModal('Delete this log entry? This cannot be undone.', () => {
+    state.notes = (state.notes || []).filter(n => n.id !== id);
+    if (currentNoteId === id) currentNoteId = null;
+    saveState();
+    renderNotesMain();
+  });
+}
+
+function switchToNote(id) {
+  finalizeCurrentNote();
+  currentNoteId = id;
+  renderNotesMain();
+}
+
+function shiftNoteEntry(delta) {
+  finalizeCurrentNote();
+  const list = allNotesSorted(); // newest first
+  if (list.length === 0) return;
+  const idx = list.findIndex(n => n.id === currentNoteId);
+  const newIdx = idx === -1
+    ? (delta > 0 ? 0 : list.length - 1)
+    : Math.min(Math.max(idx - delta, 0), list.length - 1);
+  currentNoteId = list[newIdx].id;
+  renderNotesMain();
+}
+
+function setNotesFilter(el, deskId) {
+  notesFilterDesk = deskId;
+  document.querySelectorAll('.notes-outline-filter .notes-tag').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  renderNotesOutlineList();
+}
+
+function setNotesSearch(val) {
+  notesSearchQuery = val.toLowerCase();
+  renderNotesOutlineList();
+}
+
+function notesOutlineSource() {
+  return allNotesSorted().filter(n =>
+    n.id === currentNoteId || n.title || htmlToPlainText(noteBodyHtml(n)) || (n.tags && n.tags.length));
+}
+
+function renderNotesOutlineList() {
+  const container = document.getElementById('notes-outline-list');
+  if (!container) return;
+
+  let list = notesOutlineSource();
+  if (notesFilterDesk) list = list.filter(n => (n.tags || []).includes(notesFilterDesk));
+  if (notesSearchQuery) list = list.filter(n => (n.title || '').toLowerCase().includes(notesSearchQuery) || htmlToPlainText(noteBodyHtml(n)).toLowerCase().includes(notesSearchQuery) || n.date.includes(notesSearchQuery));
+
+  if (list.length === 0) {
+    container.innerHTML = `<div class="notes-outline-empty">No entries match.</div>`;
+    return;
+  }
+
+  const monthNames = MONTH_NAMES;
+  let html = '';
+  let lastMonthKey = null;
+
+  list.forEach(n => {
+    const d = new Date(n.date + 'T00:00:00');
+    const monthKey = n.date.slice(0, 7);
+    if (monthKey !== lastMonthKey) {
+      html += `<div class="notes-outline-month">${monthNames[d.getMonth()]} ${d.getFullYear()}</div>`;
+      lastMonthKey = monthKey;
+    }
+    const plain = n.title || htmlToPlainText(noteBodyHtml(n));
+    const snippet = plain ? plain.slice(0, 40) : '(empty)';
+    const tagDots = (n.tags || []).map(id => {
+      const desk = DESKS.find(x => x.id === id);
+      return desk ? `<span class="tag-dot" style="background:${desk.ic_color}"></span>` : '';
+    }).join('');
+    html += `
+      <button class="notes-outline-item ${n.id === currentNoteId ? 'active' : ''}" onmousedown="event.preventDefault()" onclick="switchToNote('${n.id}')">
+        <span class="notes-outline-dot"></span>
+        <span class="notes-outline-snippet"><b>${DOW_NAMES[d.getDay()].slice(0,3)} ${d.getDate()}</b>${snippet !== '(empty)' ? ' — ' + escHtml(snippet) : ''}</span>
+        <span class="notes-outline-tags">${tagDots}</span>
+      </button>`;
+  });
+
+  container.innerHTML = html;
+}
+
+function renderNotesMain() {
+  notesDirty = false;
+
+  if (!currentNoteId || !findNote(currentNoteId)) {
+    const list = allNotesSorted();
+    currentNoteId = list.length > 0 ? list[0].id : null;
+  }
+  const note = currentNoteId ? findNote(currentNoteId) : null;
+
+  if (!note) {
+    document.getElementById('main-content').innerHTML = `
+      <div class="desk-header">
+        <div class="desk-title-area">
+          <div class="desk-title">📝 Notes</div>
+          <div class="desk-desc">A running log — add as many entries as you need, each for a specific task or topic.</div>
+        </div>
+      </div>
+      <div class="empty-state">
+        <div class="empty-icon">📝</div>
+        <div class="empty-text">No log entries yet.</div>
+        <button class="btn btn-primary" style="margin-top:12px" onclick="createNewNote()">＋ New entry</button>
+      </div>`;
+    return;
+  }
+
+  const d = new Date(note.date + 'T00:00:00');
+  const dateLabel = `${DOW_NAMES[d.getDay()].slice(0,3)}, ${MONTH_NAMES[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+  const savedLabel = note.updatedAt
+    ? '✓ Saved ' + new Date(note.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : 'Not saved yet';
+  const tags = note.tags || [];
+
+  let html = `
+    <div class="desk-header">
+      <div class="desk-title-area">
+        <div class="desk-title">📝 Notes</div>
+        <div class="desk-desc">A running log — add as many entries as you need, each for a specific task or topic.</div>
+      </div>
+      <div class="desk-actions">
+        <button class="btn" onmousedown="event.preventDefault()" onclick="shiftNoteEntry(-1)">‹ Prev entry</button>
+        <button class="btn" onmousedown="event.preventDefault()" onclick="shiftNoteEntry(1)">Next entry ›</button>
+        <button class="btn btn-primary" onmousedown="event.preventDefault()" onclick="createNewNote()">＋ New entry</button>
+      </div>
+    </div>
+
+    <div class="notes-layout">
+      <div class="notes-editor" style="--p-space:${note.paraSpacing !== undefined ? note.paraSpacing : 10}px">
+        <div class="notes-editor-inner">
+          <div class="notes-editor-head">
+            <span class="notes-editor-date">${dateLabel}</span>
+            <span class="notes-editor-head-right">
+              <span class="notes-saved" id="notes-saved-label">${savedLabel}</span>
+              <button class="btn btn-primary" id="notes-save-btn" style="font-size:11px;padding:4px 10px" onclick="saveNoteNow()" ${notesDirty ? '' : 'disabled'}>✓ Save</button>
+              <button class="btn btn-danger" style="font-size:11px;padding:4px 10px" onclick="deleteNote('${note.id}')">🗑 Delete entry</button>
+            </span>
+          </div>
+
+          <input type="text" class="notes-title-input" id="notes-title-input" placeholder="Add a title for this entry…"
+            value="${escHtml(note.title || '')}"
+            oninput="updateNoteTitle('${note.id}', this.value)">
+
+          <div class="notes-tag-row">
+            <span class="notes-tag-label">Tags:</span>
+            ${DESKS.map(desk => `
+              <span class="notes-tag ${tags.includes(desk.id) ? 'selected' : ''}"
+                style="--tag-bg:${desk.ic_bg};--tag-color:${desk.ic_color}"
+                onclick="toggleNoteTag('${note.id}','${desk.id}')">
+                <span class="tag-dot"></span>${escHtml(desk.name)}
+              </span>`).join('')}
+          </div>
+        </div>
+
+        <div class="notes-toolbar">
+          <select title="Font" onchange="notesExec('fontName', this.value)">
+            <option value="-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif">Default</option>
+            <option value="Georgia, serif">Georgia</option>
+            <option value="'Times New Roman', serif">Times New Roman</option>
+            <option value="Arial, sans-serif">Arial</option>
+            <option value="Verdana, sans-serif">Verdana</option>
+            <option value="'Courier New', monospace">Courier New</option>
+          </select>
+          <select title="Font size" onchange="notesExec('fontSize', this.value)">
+            <option value="2">Small</option>
+            <option value="3" selected>Normal</option>
+            <option value="5">Large</option>
+            <option value="7">Huge</option>
+          </select>
+          <span class="tb-sep"></span>
+          <button type="button" class="tb-btn" data-cmd="bold" title="Bold" onmousedown="event.preventDefault()" onclick="notesExec('bold')"><b>B</b></button>
+          <button type="button" class="tb-btn" data-cmd="italic" title="Italic" onmousedown="event.preventDefault()" onclick="notesExec('italic')"><i>I</i></button>
+          <button type="button" class="tb-btn" data-cmd="underline" title="Underline" onmousedown="event.preventDefault()" onclick="notesExec('underline')"><u>U</u></button>
+          <button type="button" class="tb-btn" data-cmd="strikeThrough" title="Strikethrough" onmousedown="event.preventDefault()" onclick="notesExec('strikeThrough')"><s>S</s></button>
+          <span class="tb-sep"></span>
+          <input type="color" class="tb-color-swatch" title="Text color" value="#1a1d23" oninput="notesExec('foreColor', this.value)">
+          <input type="color" class="tb-color-swatch" title="Highlight color" value="#fff3b0" oninput="notesExec('hiliteColor', this.value)">
+          <span class="tb-sep"></span>
+          <button type="button" class="tb-btn" data-cmd="justifyLeft" title="Align left" onmousedown="event.preventDefault()" onclick="notesExec('justifyLeft')">⟸</button>
+          <button type="button" class="tb-btn" data-cmd="justifyCenter" title="Align center" onmousedown="event.preventDefault()" onclick="notesExec('justifyCenter')">≡</button>
+          <button type="button" class="tb-btn" data-cmd="justifyRight" title="Align right" onmousedown="event.preventDefault()" onclick="notesExec('justifyRight')">⟹</button>
+          <span class="tb-sep"></span>
+          <button type="button" class="tb-btn" data-cmd="insertUnorderedList" title="Bullet list" onmousedown="event.preventDefault()" onclick="notesExec('insertUnorderedList')">•≡</button>
+          <button type="button" class="tb-btn" data-cmd="insertOrderedList" title="Numbered list" onmousedown="event.preventDefault()" onclick="notesExec('insertOrderedList')">1≡</button>
+          <span class="tb-sep"></span>
+          <select title="Line spacing" onchange="setNoteLineSpacing('${note.id}', this.value)">
+            <option value="1.3" ${(note && note.lineSpacing) === '1.3' ? 'selected' : ''}>Single</option>
+            <option value="1.7" ${!note || !note.lineSpacing || note.lineSpacing === '1.7' ? 'selected' : ''}>1.5 lines</option>
+            <option value="2.2" ${(note && note.lineSpacing) === '2.2' ? 'selected' : ''}>Double</option>
+          </select>
+          <select title="Paragraph spacing" onchange="setNoteParaSpacing('${note.id}', this.value)">
+            <option value="0" ${note && note.paraSpacing === '0' ? 'selected' : ''}>No gap</option>
+            <option value="10" ${!note || note.paraSpacing === undefined || note.paraSpacing === '10' ? 'selected' : ''}>Normal</option>
+            <option value="20" ${note && note.paraSpacing === '20' ? 'selected' : ''}>Wide</option>
+          </select>
+          <span class="tb-sep"></span>
+          <button type="button" class="tb-btn" title="Clear formatting" onmousedown="event.preventDefault()" onclick="notesExec('removeFormat')">⨯</button>
+        </div>
+
+        <div class="notes-editable" id="notes-editable" contenteditable="true" data-placeholder="Log today's notes…"
+          style="line-height:${(note && note.lineSpacing) || '1.7'}"
+          oninput="onNotesEditableInput()"
+          onblur="onNotesEditableBlur(event)"
+          onpaste="onNotesPaste(event)"
+          onkeydown="onNotesEditableKeydown(event)">${noteBodyHtml(note)}</div>
+      </div>
+
+      <aside class="notes-outline">
+        <div class="notes-outline-head">Log entries</div>
+        <input class="notes-outline-search" id="notes-search-input" placeholder="🔍 Search notes…" value="${escHtml(notesSearchQuery)}" oninput="setNotesSearch(this.value)">
+        <div class="notes-outline-filter">
+          <span class="notes-tag ${!notesFilterDesk ? 'selected' : ''}" style="--tag-bg:#EEF3FB;--tag-color:#1B3A6B" onclick="setNotesFilter(this, null)"><span class="tag-dot"></span>All</span>
+          ${DESKS.map(desk => `
+            <span class="notes-tag ${notesFilterDesk === desk.id ? 'selected' : ''}" style="--tag-bg:${desk.ic_bg};--tag-color:${desk.ic_color}" onclick="setNotesFilter(this, '${desk.id}')">
+              <span class="tag-dot"></span>${escHtml(desk.name)}
+            </span>`).join('')}
+        </div>
+        <div id="notes-outline-list"></div>
+      </aside>
+    </div>
+  `;
+
+  document.getElementById('main-content').innerHTML = html;
+  renderNotesOutlineList();
+}
+
+// ── DOCUMENT LINKS ─────────────────────────────────────────────────────────────
+
+function linkIcon(cat) {
+  const map = { Sheets:'📊', Docs:'📄', Slides:'📽️', Drive:'📁', Other:'🔗' };
+  return map[cat] || '🔗';
+}
+
+let linksFilterCat = '';
+let linksSearchQuery = '';
+
+function setLinksFilter(val) {
+  linksFilterCat = val;
+  renderLinksMain();
+}
+
+function setLinksSearch(val) {
+  linksSearchQuery = val.toLowerCase();
+  renderLinksMain();
+}
+
+const LINK_CATS = ['Sheets', 'Docs', 'Slides', 'Drive', 'Other'];
+function linkCatLabel(cat) { return cat === 'Drive' ? 'Drive folder' : cat; }
+
+function renderLinksMain() {
+  const allLinks = state.docLinks || [];
+  let links = allLinks;
+  if (linksFilterCat) links = links.filter(l => (l.cat || 'Other') === linksFilterCat);
+  if (linksSearchQuery) links = links.filter(l => l.label.toLowerCase().includes(linksSearchQuery) || l.url.toLowerCase().includes(linksSearchQuery));
+
+  let html = `
+    <div class="desk-header">
+      <div class="desk-title-area">
+        <div class="desk-title">🔗 Document links</div>
+        <div class="desk-desc">Your directory of Google Docs, Sheets, Slides, and Drive folders.</div>
+      </div>
+      <div class="desk-actions">
+        <input class="add-input" placeholder="🔍 Search links…" style="width:160px" value="${escHtml(linksSearchQuery)}" oninput="setLinksSearch(this.value)">
+        <select class="add-priority-select" onchange="setLinksFilter(this.value)">
+          <option value="" ${!linksFilterCat ? 'selected' : ''}>All categories</option>
+          ${LINK_CATS.map(c => `<option value="${c}" ${linksFilterCat === c ? 'selected' : ''}>${linkCatLabel(c)}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div class="add-task-area" style="cursor:default">
+      <input class="add-input" id="link-label" placeholder="Label (e.g. July P&amp;L — Branch 3)" style="flex:2">
+      <input class="add-input" id="link-url" placeholder="https://docs.google.com/…" style="flex:2">
+      <select class="add-priority-select" id="link-cat">
+        <option value="Sheets">Sheets</option>
+        <option value="Docs">Docs</option>
+        <option value="Slides">Slides</option>
+        <option value="Drive">Drive folder</option>
+        <option value="Other">Other</option>
+      </select>
+      <button class="btn btn-primary" onclick="addLink()">Add</button>
+    </div>
+    <div class="tasks-list">`;
+
+  if (allLinks.length === 0) {
+    html += `<div class="empty-state"><div class="empty-icon">🔗</div><div class="empty-text">No links yet — add a Google Doc, Sheet, or Slide URL above.</div></div>`;
+  } else if (links.length === 0) {
+    html += `<div class="empty-state"><div class="empty-icon">🔗</div><div class="empty-text">No links match this filter.</div></div>`;
+  } else {
+    links.forEach(l => {
+      html += `
+        <div class="task-card p4">
+          <div class="task-main">
+            <div class="link-icon">${linkIcon(l.cat)}</div>
+            <div class="task-body">
+              <div class="task-title-row">
+                <span class="task-title-input" contenteditable="true" style="display:block" onblur="editLink('${l.id}','label',this)">${escHtml(l.label)}</span>
+              </div>
+              <a href="${escHtml(l.url)}" target="_blank" rel="noopener" style="font-size:11px;color:var(--navy-light);word-break:break-all">${escHtml(l.url)}</a>
+            </div>
+            <div class="task-controls">
+              <span class="priority-btn p4">${escHtml(l.cat || 'Other')}</span>
+              <button class="delete-btn" style="opacity:1" onclick="deleteLink('${l.id}')" title="Remove">✕</button>
+            </div>
+          </div>
+        </div>`;
+    });
+  }
+
+  html += `</div>`;
+  document.getElementById('main-content').innerHTML = html;
+}
+
+function addLink() {
+  const label = document.getElementById('link-label').value.trim();
+  const url = document.getElementById('link-url').value.trim();
+  const cat = document.getElementById('link-cat').value;
+  if (!label || !url) return;
+  if (!state.docLinks) state.docLinks = [];
+  state.docLinks.push({ id:'link_' + Date.now(), label, url, cat });
+  saveState();
+  renderLinksMain();
+}
+
+function editLink(id, field, el) {
+  const l = (state.docLinks || []).find(l => l.id === id);
+  if (l) { l[field] = el.innerText.trim(); saveState(); }
+}
+
+function deleteLink(id) {
+  state.docLinks = (state.docLinks || []).filter(l => l.id !== id);
+  saveState();
+  renderLinksMain();
+}
+
+// ── TASK ACTIONS ───────────────────────────────────────────────────────────────
+
+function findTask(id) {
+  for (const d of DESKS) {
+    const t = (state.desks[d.id] || []).find(t => t.id === id);
+    if (t) return t;
+  }
+  return null;
+}
+
+function toggleDone(id) {
+  const t = findTask(id);
+  if (t) { t.done = !t.done; t.status = t.done ? 'done' : (t.status === 'done' ? 'not-started' : t.status); saveState(); renderAll(); }
+}
+
+function updateTaskPriority(id, priority) {
+  const t = findTask(id);
+  if (t) { t.priority = priority; saveState(); renderAll(); }
+}
+
+function cycleStatus(id) {
+  const t = findTask(id);
+  if (t) {
+    t.status = STATUS_CYCLE[t.status] || 'not-started';
+    if (t.status === 'done') t.done = true;
+    else if (t.done) t.done = false;
+    saveState(); renderAll();
+  }
+}
+
+function updateTaskDate(id, val) {
+  const t = findTask(id);
+  // A due date can flip effectivePriority (e.g. into/out of Overdue), which
+  // moves the task's section, its card color, and the top KPI counts — so
+  // this needs the full re-render, not just a save.
+  if (t) { t.date = val; saveState(); renderAll(); }
+}
+
+function updateField(id, field, val) {
+  const t = findTask(id);
+  if (t) { t[field] = val; saveState(); }
+}
+
+function deleteTask(id) {
+  for (const d of DESKS) {
+    const idx = (state.desks[d.id] || []).findIndex(t => t.id === id);
+    if (idx !== -1) { state.desks[d.id].splice(idx, 1); saveState(); renderAll(); return; }
+  }
+}
+
+function toggleNotes(id) {
+  const area = document.getElementById('notes-area-' + id);
+  if (area) {
+    area.classList.toggle('open');
+    const ta = area.querySelector('.task-notes');
+    if (ta && area.classList.contains('open')) { ta.focus(); autoResize(ta); }
+  }
+}
+
+function clearTaskLink(id) {
+  const t = findTask(id);
+  if (t) { t.link = ''; saveState(); renderAll(); }
+}
+
+function toggleLink(id) {
+  const area = document.getElementById('link-area-' + id);
+  if (area) {
+    area.classList.toggle('open');
+    const input = area.querySelector('.task-link-input');
+    if (input && area.classList.contains('open')) input.focus();
+  }
+}
+
+function clearDone() {
+  state.desks[activeView] = (state.desks[activeView] || []).filter(t => !t.done);
+  saveState(); renderAll();
+}
+
+function resetDesk() {
+  showConfirmModal('Reset this desk to default tasks? This cannot be undone.', () => {
+    state.desks[activeView] = JSON.parse(JSON.stringify(DEFAULT_TASKS[activeView] || [])).map(normalizeTask);
+    saveState(); renderAll();
+  });
+}
+
+function handleAddKey(e, deskId) {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  addTask(deskId);
+}
+
+function addTask(deskId) {
+  const input = document.getElementById('add-input-' + deskId);
+  const linkInput = document.getElementById('add-link-' + deskId);
+  const priSel = document.getElementById('add-priority-' + deskId);
+  const title = input.value.trim();
+  if (!title) { input.focus(); return; }
+  const newTask = {
+    id: deskId + '_' + Date.now(),
+    title,
+    meta: '',
+    priority: priSel ? priSel.value : 'p2',
+    done: false,
+    notes: '',
+    date: '',
+    status: 'not-started',
+    link: linkInput ? linkInput.value.trim() : '',
+  };
+  if (!state.desks[deskId]) state.desks[deskId] = [];
+  state.desks[deskId].unshift(newTask);
+  saveState();
+  input.value = '';
+  if (linkInput) linkInput.value = '';
+  renderAll();
+}
+
+function saveAndRender() {
+  saveState();
+  computeKpis();
+  renderNav();
+}
+
+// ── HELPERS ────────────────────────────────────────────────────────────────────
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = el.scrollHeight + 'px';
+}
+
+function escHtml(s) {
+  return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function renderAll() {
+  computeKpis();
+  renderNav();
+  renderMain();
+  setTimeout(() => {
+    document.querySelectorAll('textarea').forEach(ta => autoResize(ta));
+  }, 0);
+}
+
+// ── CLOUD SYNC ─────────────────────────────────────────────────────────────────
+
+let dashboardPin = localStorage.getItem('qualitech_pin') || '';
+let cloudAvailable = false;
+let syncTimer = null;
+
+function setSyncStatus(mode) {
+  const el = document.getElementById('sync-status-text');
+  const btn = document.getElementById('sync-action-btn');
+  if (!el) return;
+  const map = {
+    off:        { text: '☁ Cloud sync: off',            btnText: 'Connect' },
+    connecting: { text: '☁ Connecting…',                 btnText: 'Connect' },
+    saving:     { text: '☁ Saving…',                     btnText: 'Disconnect' },
+    synced:     { text: '☁ Synced',                      btnText: 'Disconnect' },
+    error:      { text: '⚠ Sync error — saved locally',  btnText: 'Retry' },
+  };
+  const m = map[mode] || map.off;
+  el.textContent = m.text;
+  if (btn) btn.textContent = m.btnText;
+}
+
+function openSyncModal() {
+  if (cloudAvailable) {
+    showConfirmModal("Disconnect cloud sync on this device? Your data stays saved locally, it just won't push to the cloud anymore.", disconnectSync, { danger: false, confirmLabel: 'Disconnect' });
+    return;
+  }
+  const html = `
+    <div class="modal-overlay" onclick="if(event.target===this) closeModal()">
+      <div class="modal-panel" style="max-width:360px">
+        <div class="modal-header">
+          <div class="modal-title">Connect cloud sync</div>
+          <button class="delete-btn" style="opacity:1" onclick="closeModal()">✕</button>
+        </div>
+        <div style="padding:16px 18px">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Enter the dashboard PIN to sync this desk's data across devices.</div>
+          <input type="password" id="sync-pin-input" class="add-input" placeholder="PIN"
+            style="border:1px solid var(--border-strong);border-radius:7px;padding:8px 10px;width:100%;margin-bottom:10px"
+            onkeydown="if(event.key==='Enter') submitSyncPin()">
+          <button class="btn btn-primary" style="width:100%" onclick="submitSyncPin()">Connect</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modal-root').innerHTML = html;
+  setTimeout(() => { const inp = document.getElementById('sync-pin-input'); if (inp) inp.focus(); }, 50);
+}
+
+function submitSyncPin() {
+  const inp = document.getElementById('sync-pin-input');
+  const pin = inp ? inp.value.trim() : '';
+  if (!pin) return;
+  closeModal();
+  connectSync(pin, false);
+}
+
+async function connectSync(pin, silent) {
+  if (!silent) setSyncStatus('connecting');
+  try {
+    const res = await fetch('/api/state', { headers: { 'x-dashboard-pin': pin } });
+    if (res.status === 401) {
+      if (!silent) showAlertModal('Incorrect PIN.');
+      setSyncStatus('off');
+      return;
+    }
+    if (!res.ok) throw new Error('unreachable');
+    const data = await res.json();
+    dashboardPin = pin;
+    localStorage.setItem('qualitech_pin', pin);
+    cloudAvailable = true;
+
+    if (data.state && data.state.desks) {
+      DESKS.forEach(d => {
+        if (!data.state.desks[d.id]) data.state.desks[d.id] = [];
+        data.state.desks[d.id].forEach(normalizeTask);
+      });
+      if (!data.state.meetings) data.state.meetings = [];
+      if (!data.state.docLinks) data.state.docLinks = [];
+      if (!data.state.notes) data.state.notes = [];
+      if (!data.state.morningCheck) data.state.morningCheck = { date: '', desks: [] };
+      state = data.state;
+      localStorage.setItem(STORE_KEY, JSON.stringify(state));
+      renderAll();
+    } else {
+      // Nothing saved on the server yet — push what's here now as the seed.
+      await pushStateToCloud();
+    }
+    setSyncStatus('synced');
+  } catch (e) {
+    cloudAvailable = false;
+    if (!silent) showAlertModal("Couldn't reach cloud sync. Check that the backend is deployed (see SYNC_SETUP.md) and try again.");
+    setSyncStatus('off');
+  }
+}
+
+function disconnectSync() {
+  cloudAvailable = false;
+  dashboardPin = '';
+  localStorage.removeItem('qualitech_pin');
+  setSyncStatus('off');
+}
+
+function scheduleCloudSync() {
+  if (!cloudAvailable) return;
+  clearTimeout(syncTimer);
+  setSyncStatus('saving');
+  syncTimer = setTimeout(pushStateToCloud, 800);
+}
+
+async function pushStateToCloud() {
+  try {
+    const res = await fetch('/api/state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-dashboard-pin': dashboardPin },
+      body: JSON.stringify({ state }),
+    });
+    if (!res.ok) throw new Error('sync failed');
+    setSyncStatus('synced');
+  } catch (e) {
+    setSyncStatus('error');
+  }
+}
+
+// ── BACKUP: EXPORT / IMPORT ───────────────────────────────────────────────────
+
+function exportBackup() {
+  const payload = { exportedAt: new Date().toISOString(), version: STORE_KEY, state };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `qualitech-dashboard-backup-${fmtDate(new Date())}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function importBackup(ev) {
+  const file = ev.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const parsed = JSON.parse(reader.result);
+      const incoming = parsed.state || parsed; // accept raw state or a wrapped export
+      if (!incoming || !incoming.desks) throw new Error('Not a valid backup file');
+      showConfirmModal('Import this backup? It will replace everything currently saved in this browser.', () => {
+        if (!incoming.meetings) incoming.meetings = [];
+        if (!incoming.docLinks) incoming.docLinks = [];
+        if (!incoming.notes) incoming.notes = [];
+        if (!incoming.morningCheck) incoming.morningCheck = { date: '', desks: [] };
+        DESKS.forEach(d => {
+          if (!incoming.desks[d.id]) incoming.desks[d.id] = [];
+          incoming.desks[d.id].forEach(normalizeTask);
+        });
+        state = incoming;
+        saveState();
+        activeView = 'overview';
+        renderAll();
+        showAlertModal('Backup imported.');
+      }, { confirmLabel: 'Import' });
+    } catch (e) {
+      showAlertModal("Could not read that file — make sure it's a backup exported from this dashboard.");
+    }
+    ev.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+// ── PASSCODE LOCK ──────────────────────────────────────────────────────────────
+// A 4-digit code the dashboard asks for once per browser session, purely as a
+// glance-deterrent on a shared or unlocked device. It's stored in plain text
+// in localStorage — it does not encrypt or protect the underlying data, which
+// is why "Forgot passcode?" can just clear it without touching state.
+
+const LOCK_KEY = 'qualitech_lock_code';
+const UNLOCK_FLAG = 'qualitech_unlocked';
+let pendingLockCode = '';
+
+function initLock() {
+  if (localStorage.getItem(LOCK_KEY) && sessionStorage.getItem(UNLOCK_FLAG) === '1') {
+    hideLockOverlay();
+  } else if (!localStorage.getItem(LOCK_KEY)) {
+    renderLockScreen('create');
+  } else {
+    renderLockScreen('enter');
+  }
+}
+
+function hideLockOverlay() {
+  const el = document.getElementById('lock-overlay');
+  if (el) el.style.display = 'none';
+}
+
+// ── DESKTOP NOTIFICATIONS ────────────────────────────────────────────────────
+// Browser Notification API only — fires while this tab/PWA is actually open
+// (there's no server-side push here), which is the point when running the
+// dashboard as a local web app on a laptop that's normally on and open.
+const NOTIF_KEY = 'qualitech_notif_enabled';
+const NOTIF_DIGEST_KEY = 'qualitech_notif_last_digest';
+const NOTIF_SEEN_OVERDUE_KEY = 'qualitech_notif_seen_overdue';
+
+function notifSupported() { return 'Notification' in window; }
+function notifActive() {
+  return notifSupported() && Notification.permission === 'granted' && localStorage.getItem(NOTIF_KEY) === '1';
+}
+
+function sendNotification(title, body, tag) {
+  if (!notifActive()) return;
+  try {
+    const n = new Notification(title, { body, tag, icon: 'icon.svg' });
+    n.onclick = () => { window.focus(); n.close(); };
+  } catch (e) {}
+}
+
+function toggleNotifications() {
+  if (!notifSupported()) {
+    showAlertModal("Your browser doesn't support desktop notifications.");
+    return;
+  }
+  if (localStorage.getItem(NOTIF_KEY) === '1') {
+    localStorage.setItem(NOTIF_KEY, '0');
+    updateNotifStatusUI();
+    return;
+  }
+  Notification.requestPermission().then((perm) => {
+    if (perm === 'granted') {
+      localStorage.setItem(NOTIF_KEY, '1');
+      sendNotification('Notifications on', "You'll get a heads-up here for overdue and due-today tasks while this tab is open.", 'notif-enabled');
+      localStorage.removeItem(NOTIF_DIGEST_KEY);
+      maybeSendDailyDigest();
+      checkOverdueNudges();
+    } else {
+      showAlertModal('Notifications were blocked. Allow them for this site in your browser settings, then try again.');
+    }
+    updateNotifStatusUI();
+  });
+}
+
+function updateNotifStatusUI() {
+  const row = document.getElementById('notif-status-row');
+  if (!row) return;
+  const supported = notifSupported();
+  const enabled = notifActive();
+  row.innerHTML = `
+    <span style="font-size:11px;color:var(--muted)">🔔 Desktop alerts: ${supported ? (enabled ? 'on' : 'off') : 'unsupported'}</span>
+    <button class="btn" style="font-size:11px;padding:4px 8px" onclick="toggleNotifications()" ${supported ? '' : 'disabled'}>${enabled ? 'Turn off' : 'Turn on'}</button>`;
+}
+
+// One digest per calendar day, only sent if there's actually something to
+// flag — nothing to report shouldn't be worth a notification.
+function maybeSendDailyDigest() {
+  if (!notifActive()) return;
+  const today = fmtDate(new Date());
+  if (localStorage.getItem(NOTIF_DIGEST_KEY) === today) return;
+  let overdue = 0, dueToday = 0;
+  allTasksFlat().forEach(({t}) => {
+    if (t.done) return;
+    if (effectivePriority(t) === 'p1') overdue++;
+    else if (t.date === today) dueToday++;
+  });
+  if (overdue > 0 || dueToday > 0) {
+    const parts = [];
+    if (overdue > 0) parts.push(`${overdue} overdue`);
+    if (dueToday > 0) parts.push(`${dueToday} due today`);
+    sendNotification('Morning check-in', parts.join(' · '), 'daily-digest');
+  }
+  localStorage.setItem(NOTIF_DIGEST_KEY, today);
+}
+
+// Nudges once per task the moment it becomes overdue, not on every check —
+// tasks drop out of the "seen" set as soon as they're no longer overdue
+// (done, or the date moves), so a task can re-nudge if it slips again later.
+function checkOverdueNudges() {
+  if (!notifActive()) return;
+  let seen;
+  try { seen = new Set(JSON.parse(localStorage.getItem(NOTIF_SEEN_OVERDUE_KEY) || '[]')); }
+  catch (e) { seen = new Set(); }
+  const stillOverdue = new Set();
+  allTasksFlat().forEach(({t, d}) => {
+    if (t.done || effectivePriority(t) !== 'p1') return;
+    stillOverdue.add(t.id);
+    if (!seen.has(t.id)) sendNotification(`Overdue · ${d.name}`, t.title, 'overdue-' + t.id);
+  });
+  localStorage.setItem(NOTIF_SEEN_OVERDUE_KEY, JSON.stringify([...stillOverdue]));
+}
+
+function renderLockScreen(mode, opts) {
+  opts = opts || {};
+  const overlay = document.getElementById('lock-overlay');
+  if (!overlay) return;
+  overlay.style.display = 'flex';
+
+  let title, sub, showForgot = false;
+  if (mode === 'create') {
+    title = 'Create a passcode';
+    sub = 'Set a 4-digit code to open this dashboard on this device.';
+  } else if (mode === 'confirm') {
+    title = 'Confirm passcode';
+    sub = 'Enter the same 4 digits again.';
+  } else {
+    title = 'Enter passcode';
+    sub = 'This dashboard is locked on this device.';
+    showForgot = true;
+  }
+
+  overlay.innerHTML = `
+    <div class="lock-card">
+      <div class="lock-title">🔒 ${title}</div>
+      <div class="lock-sub">${sub}</div>
+      <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" class="lock-input" id="lock-input"
+        onkeydown="if(event.key==='Enter') submitLockInput('${mode}')">
+      ${opts.error ? `<div class="lock-error">${escHtml(opts.error)}</div>` : ''}
+      <button class="btn btn-primary" style="width:100%;margin-top:10px" onclick="submitLockInput('${mode}')">
+        ${mode === 'enter' ? 'Unlock' : 'Continue'}
+      </button>
+      ${showForgot ? `<button class="lock-forgot" onclick="forgotLockCode()">Forgot passcode?</button>` : ''}
+    </div>`;
+  setTimeout(() => { const inp = document.getElementById('lock-input'); if (inp) inp.focus(); }, 50);
+}
+
+function submitLockInput(mode) {
+  const inp = document.getElementById('lock-input');
+  const val = inp ? inp.value.trim() : '';
+  if (!/^\d{4}$/.test(val)) {
+    renderLockScreen(mode, { error: 'Enter exactly 4 digits.' });
+    return;
+  }
+  if (mode === 'create') {
+    pendingLockCode = val;
+    renderLockScreen('confirm');
+    return;
+  }
+  if (mode === 'confirm') {
+    if (val !== pendingLockCode) {
+      pendingLockCode = '';
+      renderLockScreen('create', { error: "Codes didn't match — start over." });
+      return;
+    }
+    localStorage.setItem(LOCK_KEY, val);
+    pendingLockCode = '';
+    sessionStorage.setItem(UNLOCK_FLAG, '1');
+    hideLockOverlay();
+    updateLockStatusUI();
+    return;
+  }
+  // mode === 'enter'
+  if (val === localStorage.getItem(LOCK_KEY)) {
+    sessionStorage.setItem(UNLOCK_FLAG, '1');
+    hideLockOverlay();
+  } else {
+    renderLockScreen('enter', { error: 'Incorrect passcode.' });
+  }
+}
+
+function forgotLockCode() {
+  showConfirmModal("Reset the passcode? You'll set a new 4-digit code next — your dashboard data is not affected.", () => {
+    localStorage.removeItem(LOCK_KEY);
+    sessionStorage.removeItem(UNLOCK_FLAG);
+    renderLockScreen('create');
+  }, { confirmLabel: 'Reset' });
+}
+
+function changeLockCode() {
+  showPromptModal('Change passcode', 'Enter your current 4-digit passcode:', (current) => {
+    if (current !== localStorage.getItem(LOCK_KEY)) { showAlertModal('Incorrect passcode.'); return; }
+    localStorage.removeItem(LOCK_KEY);
+    renderLockScreen('create');
+  }, { inputType: 'password', maxlength: 4, submitLabel: 'Continue' });
+}
+
+function disableLockCode() {
+  showPromptModal('Turn off passcode lock', 'Enter your current 4-digit passcode to turn off the lock:', (current) => {
+    if (current !== localStorage.getItem(LOCK_KEY)) { showAlertModal('Incorrect passcode.'); return; }
+    localStorage.removeItem(LOCK_KEY);
+    sessionStorage.removeItem(UNLOCK_FLAG);
+    updateLockStatusUI();
+  }, { inputType: 'password', maxlength: 4, submitLabel: 'Turn off' });
+}
+
+function enableLockCode() {
+  renderLockScreen('create');
+}
+
+function updateLockStatusUI() {
+  const row = document.getElementById('lock-status-row');
+  if (!row) return;
+  const on = !!localStorage.getItem(LOCK_KEY);
+  row.innerHTML = on
+    ? `<div style="display:flex;flex-direction:column;gap:6px;width:100%">
+         <span style="font-size:11px;color:var(--muted)">🔒 Lock: on</span>
+         <span style="display:flex;gap:4px">
+           <button class="btn" style="flex:1;font-size:11px;padding:4px 8px" onclick="changeLockCode()">Change</button>
+           <button class="btn" style="flex:1;font-size:11px;padding:4px 8px" onclick="disableLockCode()">Turn off</button>
+         </span>
+         <button class="btn" style="width:100%;font-size:11px;padding:4px 8px" onclick="logOutLock()">🔒 Log out</button>
+       </div>`
+    : `<span style="font-size:11px;color:var(--muted)">🔓 Lock: off</span>
+       <button class="btn" style="font-size:11px;padding:4px 8px" onclick="enableLockCode()">Turn on</button>`;
+}
+
+function logOutLock() {
+  sessionStorage.removeItem(UNLOCK_FLAG);
+  renderLockScreen('enter');
+}
+
+// ── DATE ───────────────────────────────────────────────────────────────────────
+
+function setDate() {
+  const now = new Date();
+  const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  document.getElementById('topbar-date').textContent =
+    days[now.getDay()] + ', ' + months[now.getMonth()] + ' ' + now.getDate() + ', ' + now.getFullYear();
+}
+
+// ── INIT ───────────────────────────────────────────────────────────────────────
+
+setDate();
+renderAll();
+updateLockStatusUI();
+updateNotifStatusUI();
+initLock();
+if (dashboardPin) connectSync(dashboardPin, true);
+document.addEventListener('selectionchange', () => { if (activeView === 'notes') updateNotesToolbarState(); });
+maybeSendDailyDigest();
+checkOverdueNudges();
+
+// Keep "today" current if the dashboard is left open across midnight (or
+// just idle) — otherwise a task due "today" wouldn't flip to Overdue, and
+// the top KPI strip, without some other action triggering a re-render.
+// Same interval also re-checks desktop-notification triggers (daily digest,
+// newly-overdue nudges) since both depend on "today" being current.
+setInterval(() => {
+  setDate(); computeKpis(); renderNav();
+  maybeSendDailyDigest();
+  checkOverdueNudges();
+}, 5 * 60 * 1000);
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>

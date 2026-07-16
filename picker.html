@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Life OS</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background: #16181D;
+    color: #F2F3F5;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 22px;
+    -webkit-app-region: drag;
+    user-select: none;
+  }
+  .heading { font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: #8A8F98; }
+  .cards { display: flex; gap: 16px; -webkit-app-region: no-drag; }
+  .card {
+    width: 170px;
+    padding: 22px 16px;
+    border-radius: 14px;
+    border: 1px solid #2A2D34;
+    background: #1D2026;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    transition: transform 0.12s ease, border-color 0.12s ease;
+  }
+  .card:hover { transform: translateY(-2px); }
+  .card.work:hover { border-color: #2A5298; }
+  .card.personal:hover { border-color: #6B5FE6; }
+  .card-icon {
+    width: 48px; height: 48px;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 18px; color: #fff;
+  }
+  .card.work .card-icon { background: #1B3A6B; }
+  .card.personal .card-icon { background: #6B5FE6; }
+  .card-name { font-size: 13px; font-weight: 600; }
+  .card-sub { font-size: 11px; color: #8A8F98; text-align: center; }
+</style>
+</head>
+<body>
+  <div class="heading">Life OS</div>
+  <div class="cards">
+    <div class="card work" id="open-work">
+      <div class="card-icon">QP</div>
+      <div class="card-name">Work</div>
+      <div class="card-sub">Qualitech morning dashboard</div>
+    </div>
+    <div class="card personal" id="open-personal">
+      <div class="card-icon">JH</div>
+      <div class="card-name">Personal</div>
+      <div class="card-sub">Project Jhabes life OS</div>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('open-work').addEventListener('click', () => window.launcher.openApp('work'));
+    document.getElementById('open-personal').addEventListener('click', () => window.launcher.openApp('personal'));
+  </script>
+</body>
+</html>

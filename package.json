@@ -1,0 +1,42 @@
+{
+  "name": "life-os-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Desktop launcher for the Work (Qualitech) and Personal (Jhabes) dashboards — opens each as its own native app window.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.tcco26.lifeosdesktop",
+    "productName": "Life OS",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "picker-preload.js",
+      "static-server.js",
+      "picker.html",
+      "apps/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.icns"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "build/icon.png",
+      "category": "Office"
+    }
+  }
+}
