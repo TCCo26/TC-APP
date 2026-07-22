@@ -2044,6 +2044,7 @@ function renderDeskMain() {
         <div class="desk-desc">${desk.sub}</div>
       </div>
       <div class="desk-actions">
+        <button class="btn" onclick="openBulkAddModal('${activeView}')">＋ Bulk add</button>
         ${done.length > 0 ? `<button class="btn btn-danger" onclick="clearDone()">Clear ${done.length} done</button>` : ''}
         <button class="btn" onclick="resetDesk()">Reset desk</button>
       </div>
@@ -3074,6 +3075,135 @@ function addTask(deskId) {
   input.value = '';
   if (costInput) costInput.value = '';
   if (linkInput) linkInput.value = '';
+  renderAll();
+}
+
+// ── BULK ADD ───────────────────────────────────────────────────────────────────
+// Two ways to add many entries at once instead of one at a time:
+//  1. Paste rows — for an existing list (e.g. copied straight out of a
+//     spreadsheet: Title / Amount / Date columns, tab-separated when pasted).
+//  2. Generate a repeating series — for a single item that recurs on a fixed
+//     interval (a weekly task, a loan's installment plan).
+
+function openBulkAddModal(deskId) {
+  const desk = DESKS.find(d => d.id === deskId);
+  const isPay = deskId === 'pay';
+  const html = `
+    <div class="modal-overlay" onclick="if(event.target===this) closeModal()">
+      <div class="modal-panel" style="max-width:540px">
+        <div class="modal-header">
+          <div class="modal-title">Bulk add — ${desk.icon} ${desk.name}</div>
+          <button class="delete-btn" style="opacity:1" onclick="closeModal()">✕</button>
+        </div>
+        <div style="padding:14px 18px 18px;display:flex;flex-direction:column;gap:18px">
+
+          <div>
+            <div style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:4px">Paste multiple rows</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:6px">One entry per line: Title, Amount, Date. Paste straight from a spreadsheet (tab-separated) or comma-separate it yourself. Amount and date are optional per line.</div>
+            <textarea id="bulk-paste-text" rows="6" style="width:100%;box-sizing:border-box;font-family:inherit;font-size:12px;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text)" placeholder="Supplier invoice #2024-441, 38500, 2026-07-23"></textarea>
+            <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
+              ${isPay ? `<select class="add-priority-select" id="bulk-paste-kind">${kindOptionsHtml('payment')}</select>` : ''}
+              <button class="btn btn-primary" onclick="bulkAddFromPaste('${deskId}')">＋ Add pasted rows</button>
+            </div>
+          </div>
+
+          <div style="border-top:1px solid var(--border);padding-top:14px">
+            <div style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:4px">Generate a repeating series</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:6px">One title, repeated on a schedule — a weekly task or an installment plan.</div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px">
+              <input class="add-input" id="bulk-rep-title" placeholder="Title…" style="flex:2;min-width:160px">
+              ${isPay ? `<input class="add-input" id="bulk-rep-cost" type="number" min="0" step="0.01" placeholder="Amount (₱)" style="flex:0 0 110px">` : ''}
+              <input type="date" class="date-input" id="bulk-rep-start" title="First due date">
+              <select class="add-priority-select" id="bulk-rep-every" title="Repeat interval">
+                <option value="1">Every day</option>
+                <option value="7" selected>Every week</option>
+                <option value="14">Every 2 weeks</option>
+                <option value="30">Every month</option>
+              </select>
+              <input class="add-input" id="bulk-rep-count" type="number" min="1" max="52" value="4" style="flex:0 0 64px" title="How many occurrences">
+              ${isPay ? `<select class="add-priority-select" id="bulk-rep-kind">${kindOptionsHtml('payment')}</select>` : ''}
+              <button class="btn btn-primary" onclick="bulkAddRepeating('${deskId}')">＋ Generate</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modal-root').innerHTML = html;
+}
+
+// Accepts "M/D/YYYY", "YYYY-MM-DD", or anything Date can parse; returns '' if unparseable.
+function parseFlexibleDate(s) {
+  s = (s || '').trim();
+  if (!s) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const mdy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s);
+  if (mdy) {
+    const [, m, d, y] = mdy;
+    return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+  }
+  const dt = new Date(s);
+  return isNaN(dt.getTime()) ? '' : fmtDate(dt);
+}
+
+function parseBulkLine(line) {
+  const parts = line.includes('\t') ? line.split('\t') : line.split(',');
+  const title = (parts[0] || '').trim();
+  let cost = null;
+  if (parts[1] !== undefined && parts[1].trim() !== '') {
+    const n = parseFloat(String(parts[1]).replace(/[^\d.\-]/g, ''));
+    cost = isNaN(n) ? null : n;
+  }
+  const date = parts[2] !== undefined ? parseFlexibleDate(parts[2]) : '';
+  return { title, cost, date };
+}
+
+function bulkAddFromPaste(deskId) {
+  const ta = document.getElementById('bulk-paste-text');
+  const kindSel = document.getElementById('bulk-paste-kind');
+  const lines = ta.value.split('\n').map(l => l.trim()).filter(Boolean);
+  if (!lines.length) return;
+  if (!state.desks[deskId]) state.desks[deskId] = [];
+  let added = 0;
+  lines.forEach(line => {
+    const { title, cost, date } = parseBulkLine(line);
+    if (!title) return;
+    state.desks[deskId].unshift(normalizeTask({
+      id: deskId + '_' + Date.now() + '_' + added,
+      title, meta: '', priority: 'p2', done: false, notes: '', date, status: 'not-started', link: '',
+      kind: kindSel ? kindSel.value : 'task', cost,
+    }));
+    added++;
+  });
+  if (!added) return;
+  saveState();
+  closeModal();
+  renderAll();
+}
+
+function bulkAddRepeating(deskId) {
+  const title = document.getElementById('bulk-rep-title').value.trim();
+  const startVal = document.getElementById('bulk-rep-start').value;
+  if (!title || !startVal) return;
+  const costEl = document.getElementById('bulk-rep-cost');
+  const costVal = costEl ? parseFloat(costEl.value) : NaN;
+  const everyDays = parseInt(document.getElementById('bulk-rep-every').value, 10) || 7;
+  const count = Math.max(1, Math.min(52, parseInt(document.getElementById('bulk-rep-count').value, 10) || 1));
+  const kindSel = document.getElementById('bulk-rep-kind');
+  const start = new Date(startVal + 'T00:00:00');
+
+  if (!state.desks[deskId]) state.desks[deskId] = [];
+  for (let i = 0; i < count; i++) {
+    const d = new Date(start);
+    d.setDate(d.getDate() + everyDays * i);
+    state.desks[deskId].unshift(normalizeTask({
+      id: deskId + '_' + Date.now() + '_' + i,
+      title, meta: '', priority: 'p2', done: false, notes: '', date: fmtDate(d), status: 'not-started', link: '',
+      kind: kindSel ? kindSel.value : 'task', cost: isNaN(costVal) ? null : costVal,
+    }));
+  }
+  saveState();
+  closeModal();
   renderAll();
 }
 
