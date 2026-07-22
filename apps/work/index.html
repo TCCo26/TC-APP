@@ -499,6 +499,19 @@ body {
 .status-btn.blocked     { background: #FDF0EF; color: #C0392B; border: 1px solid #F5C6C4; }
 .status-btn.done        { background: var(--green-bg); color: var(--green); border: 1px solid #BFE3D0; }
 
+.kind-select {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-family: inherit;
+  outline: none;
+  appearance: auto;
+}
+.kind-select.kind-task    { background: #EEF4FB; color: #1A5A9A; border: 1px solid #B8D4EF; }
+.kind-select.kind-payment { background: #FDF3E7; color: #9A5B12; border: 1px solid #F0D9AE; }
+
 /* ── DATE COLUMN ── */
 .date-input {
   font-size: 11px;
@@ -1360,6 +1373,14 @@ function priorityOptionsHtml(current) {
   return Object.keys(PRIORITY_LABELS).map(k => `<option value="${k}" ${k === current ? 'selected' : ''}>${PRIORITY_LABELS[k]}</option>`).join('');
 }
 
+// Only meaningful on the Payables & loans desk — lets an entry there be
+// filed as a one-off action item ("call the bank") vs. an actual amount
+// owed with a due date, so the calendar panel can list them separately.
+const KIND_LABELS = { task:'Task', payment:'Payment' };
+function kindOptionsHtml(current) {
+  return Object.keys(KIND_LABELS).map(k => `<option value="${k}" ${k === current ? 'selected' : ''}>${KIND_LABELS[k]}</option>`).join('');
+}
+
 const STATUS_LABELS = { 'not-started':'Not started', 'in-progress':'In progress', 'blocked':'Blocked', 'done':'Done' };
 const STATUS_CYCLE  = { 'not-started':'in-progress', 'in-progress':'blocked', 'blocked':'done', 'done':'not-started' };
 
@@ -1379,11 +1400,11 @@ const DEFAULT_TASKS = {
     { id:'fin5', title:'Branch 4 & 5 pre-opening cost tracker', meta:'Monitor only · Capex at 67% of budget', priority:'p4', done:false, notes:'' },
   ],
   pay: [
-    { id:'pay1', title:'Supplier invoice #2024-441 — P38,500 · 5 days overdue', meta:'Reagent supplier · Pay today to avoid supply disruption', priority:'p1', done:false, notes:'' },
-    { id:'pay2', title:'Monthly partner debt repayment — P700,000', meta:'Due Friday · Confirm cash position before releasing', priority:'p2', done:false, notes:'' },
-    { id:'pay3', title:'QDMS-SP rent — P74,320 · Due end of week', meta:'Auto-schedule from operations account', priority:'p2', done:false, notes:'' },
-    { id:'pay4', title:'Professional fees (3 branches) — P27,002 total', meta:'Bundle and pay in one transfer on Thursday', priority:'p2', done:false, notes:'' },
-    { id:'pay5', title:'Review full payables queue — P8.4M in pipeline', meta:'Priority: payroll > suppliers > rent > other · Block 30 min Wednesday', priority:'p3', done:false, notes:'' },
+    { id:'pay1', title:'Supplier invoice #2024-441 — P38,500 · 5 days overdue', meta:'Reagent supplier · Pay today to avoid supply disruption', priority:'p1', done:false, notes:'', kind:'payment' },
+    { id:'pay2', title:'Monthly partner debt repayment — P700,000', meta:'Due Friday · Confirm cash position before releasing', priority:'p2', done:false, notes:'', kind:'payment' },
+    { id:'pay3', title:'QDMS-SP rent — P74,320 · Due end of week', meta:'Auto-schedule from operations account', priority:'p2', done:false, notes:'', kind:'payment' },
+    { id:'pay4', title:'Professional fees (3 branches) — P27,002 total', meta:'Bundle and pay in one transfer on Thursday', priority:'p2', done:false, notes:'', kind:'payment' },
+    { id:'pay5', title:'Review full payables queue — P8.4M in pipeline', meta:'Priority: payroll > suppliers > rent > other · Block 30 min Wednesday', priority:'p3', done:false, notes:'', kind:'task' },
   ],
   ops: [
     { id:'ops1', title:'Branch 3: Medical technologist absent — no cover arranged', meta:'3 tests delayed · Call branch head now · Arrange relief from QDMS-SP or temp agency', priority:'p1', done:false, notes:'' },
@@ -1435,6 +1456,7 @@ function normalizeTask(t) {
   if (t.status === undefined) t.status = t.done ? 'done' : 'not-started';
   if (t.link === undefined) t.link = '';
   if (t.completedAt === undefined) t.completedAt = t.done ? '' : null;
+  if (t.kind === undefined) t.kind = 'task';
   return t;
 }
 
@@ -2027,6 +2049,7 @@ function renderDeskMain() {
         onkeydown="handleAddKey(event, '${activeView}')">
       <input class="add-input" id="add-link-${activeView}" type="url" placeholder="Link (optional)" style="flex:1"
         onclick="event.stopPropagation()" onkeydown="handleAddKey(event, '${activeView}')">
+      ${activeView === 'pay' ? `<select class="add-priority-select" id="add-kind-${activeView}" onclick="event.stopPropagation()">${kindOptionsHtml('payment')}</select>` : ''}
       <select class="add-priority-select" id="add-priority-${activeView}" onclick="event.stopPropagation()">${priorityOptionsHtml('p2')}</select>
       <button class="btn btn-primary" onclick="event.stopPropagation(); addTask('${activeView}')">＋ Add</button>
     </div>
@@ -2107,6 +2130,7 @@ function taskCardHTML(t) {
         </div>
         <div class="task-controls">
           <button class="status-btn ${t.status}" onclick="cycleStatus('${t.id}')" title="Click to change status">${STATUS_LABELS[t.status]}</button>
+          ${activeView === 'pay' ? `<select class="kind-select kind-${t.kind}" onchange="updateTaskKind('${t.id}', this.value)" title="Task or payment?">${kindOptionsHtml(t.kind)}</select>` : ''}
           <select class="priority-btn priority-select ${effectivePriority(t)}" ${effectivePriority(t) !== t.priority ? 'title="Past due date — showing as Overdue"' : ''} onchange="updateTaskPriority('${t.id}', this.value)">${priorityOptionsHtml(effectivePriority(t))}</select>
           <input type="date" class="date-input" value="${t.date || ''}" onchange="updateTaskDate('${t.id}', this.value)" title="Due date">
           <button class="delete-btn" onclick="duplicateTask('${t.id}')" title="Duplicate task">⧉</button>
@@ -2242,11 +2266,10 @@ function renderCalendarMain() {
 // Payables & loans desk specifically, sorted soonest-first, since bills and
 // debt repayments are the one category where "what's coming up, in order"
 // matters more than seeing them scattered across the month grid.
-function payablesDuesHTML() {
+function payablesGroupRowsHTML(items) {
   const payDesk = DESKS.find(d => d.id === 'pay');
-  const tasks = (state.desks.pay || []).filter(t => !t.done);
-  const dated = tasks.filter(t => t.date).sort((a, b) => a.date.localeCompare(b.date));
-  const undated = tasks.filter(t => !t.date);
+  const dated = items.filter(t => t.date).sort((a, b) => a.date.localeCompare(b.date));
+  const undated = items.filter(t => !t.date);
   const todayStr = fmtDate(new Date());
 
   const rows = dated.length
@@ -2260,14 +2283,32 @@ function payablesDuesHTML() {
       }).join('')
     : `<span style="font-size:12px;color:var(--muted)">Nothing with a due date right now.</span>`;
 
+  return { rows, undatedCount: undated.length };
+}
+
+function payablesDuesHTML() {
+  const payDesk = DESKS.find(d => d.id === 'pay');
+  const open = (state.desks.pay || []).filter(t => !t.done);
+  const payments = payablesGroupRowsHTML(open.filter(t => t.kind === 'payment'));
+  const tasks = payablesGroupRowsHTML(open.filter(t => t.kind !== 'payment'));
+
   return `
     <div class="section-divider" style="margin-top:20px">
-      <span class="section-divider-label">${payDesk.icon} Payables &amp; loan dues</span>
+      <span class="section-divider-label">${payDesk.icon} Payments due</span>
       <div class="section-divider-line"></div>
     </div>
     <div class="card" style="padding:12px">
-      ${rows}
-      ${undated.length ? `<div style="font-size:11px;color:var(--muted);margin-top:4px">+${undated.length} more in Payables &amp; loans with no due date set yet.</div>` : ''}
+      ${payments.rows}
+      ${payments.undatedCount ? `<div style="font-size:11px;color:var(--muted);margin-top:4px">+${payments.undatedCount} more payment${payments.undatedCount === 1 ? '' : 's'} with no due date set yet.</div>` : ''}
+    </div>
+
+    <div class="section-divider" style="margin-top:14px">
+      <span class="section-divider-label">📋 Payables tasks</span>
+      <div class="section-divider-line"></div>
+    </div>
+    <div class="card" style="padding:12px">
+      ${tasks.rows}
+      ${tasks.undatedCount ? `<div style="font-size:11px;color:var(--muted);margin-top:4px">+${tasks.undatedCount} more task${tasks.undatedCount === 1 ? '' : 's'} with no due date set yet.</div>` : ''}
     </div>
   `;
 }
@@ -2944,6 +2985,11 @@ function updateTaskPriority(id, priority) {
   if (t) { t.priority = priority; saveState(); renderAll(); }
 }
 
+function updateTaskKind(id, kind) {
+  const t = findTask(id);
+  if (t) { t.kind = kind; saveState(); renderAll(); }
+}
+
 function cycleStatus(id) {
   const t = findTask(id);
   if (t) {
@@ -3043,6 +3089,7 @@ function addTask(deskId) {
   const input = document.getElementById('add-input-' + deskId);
   const linkInput = document.getElementById('add-link-' + deskId);
   const priSel = document.getElementById('add-priority-' + deskId);
+  const kindSel = document.getElementById('add-kind-' + deskId);
   const title = input.value.trim();
   if (!title) { input.focus(); return; }
   const newTask = {
@@ -3055,6 +3102,7 @@ function addTask(deskId) {
     date: '',
     status: 'not-started',
     link: linkInput ? linkInput.value.trim() : '',
+    kind: kindSel ? kindSel.value : 'task',
   };
   if (!state.desks[deskId]) state.desks[deskId] = [];
   state.desks[deskId].unshift(newTask);
