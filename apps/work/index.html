@@ -1094,6 +1094,7 @@ body {
    not by priority — priority already has its own dedicated display on the
    desk pages and the top KPI strip, so the calendar's job is "which desk". */
 .cal-chip.meeting { background: #EEEDFE; color: #534AB7; border-color: #D6D3FB; }
+.cal-chip.task.done { text-decoration: line-through; opacity: 0.6; cursor: default; }
 .chip-del { cursor: pointer; opacity: 0.6; flex-shrink: 0; }
 .chip-del:hover { opacity: 1; }
 .unscheduled-tray {
@@ -1381,6 +1382,10 @@ function kindOptionsHtml(current) {
   return Object.keys(KIND_LABELS).map(k => `<option value="${k}" ${k === current ? 'selected' : ''}>${KIND_LABELS[k]}</option>`).join('');
 }
 
+function fmtCost(n) {
+  return '₱' + Number(n).toLocaleString('en-PH', { maximumFractionDigits: 2 });
+}
+
 const STATUS_LABELS = { 'not-started':'Not started', 'in-progress':'In progress', 'blocked':'Blocked', 'done':'Done' };
 const STATUS_CYCLE  = { 'not-started':'in-progress', 'in-progress':'blocked', 'blocked':'done', 'done':'not-started' };
 
@@ -1400,11 +1405,11 @@ const DEFAULT_TASKS = {
     { id:'fin5', title:'Branch 4 & 5 pre-opening cost tracker', meta:'Monitor only · Capex at 67% of budget', priority:'p4', done:false, notes:'' },
   ],
   pay: [
-    { id:'pay1', title:'Supplier invoice #2024-441 — P38,500 · 5 days overdue', meta:'Reagent supplier · Pay today to avoid supply disruption', priority:'p1', done:false, notes:'', kind:'payment' },
-    { id:'pay2', title:'Monthly partner debt repayment — P700,000', meta:'Due Friday · Confirm cash position before releasing', priority:'p2', done:false, notes:'', kind:'payment' },
-    { id:'pay3', title:'QDMS-SP rent — P74,320 · Due end of week', meta:'Auto-schedule from operations account', priority:'p2', done:false, notes:'', kind:'payment' },
-    { id:'pay4', title:'Professional fees (3 branches) — P27,002 total', meta:'Bundle and pay in one transfer on Thursday', priority:'p2', done:false, notes:'', kind:'payment' },
-    { id:'pay5', title:'Review full payables queue — P8.4M in pipeline', meta:'Priority: payroll > suppliers > rent > other · Block 30 min Wednesday', priority:'p3', done:false, notes:'', kind:'task' },
+    { id:'pay1', title:'Supplier invoice #2024-441 — P38,500 · 5 days overdue', meta:'Reagent supplier · Pay today to avoid supply disruption', priority:'p1', done:false, notes:'', kind:'payment', cost:38500 },
+    { id:'pay2', title:'Monthly partner debt repayment — P700,000', meta:'Due Friday · Confirm cash position before releasing', priority:'p2', done:false, notes:'', kind:'payment', cost:700000 },
+    { id:'pay3', title:'QDMS-SP rent — P74,320 · Due end of week', meta:'Auto-schedule from operations account', priority:'p2', done:false, notes:'', kind:'payment', cost:74320 },
+    { id:'pay4', title:'Professional fees (3 branches) — P27,002 total', meta:'Bundle and pay in one transfer on Thursday', priority:'p2', done:false, notes:'', kind:'payment', cost:27002 },
+    { id:'pay5', title:'Review full payables queue — P8.4M in pipeline', meta:'Priority: payroll > suppliers > rent > other · Block 30 min Wednesday', priority:'p3', done:false, notes:'', kind:'task', cost:null },
   ],
   ops: [
     { id:'ops1', title:'Branch 3: Medical technologist absent — no cover arranged', meta:'3 tests delayed · Call branch head now · Arrange relief from QDMS-SP or temp agency', priority:'p1', done:false, notes:'' },
@@ -1457,6 +1462,7 @@ function normalizeTask(t) {
   if (t.link === undefined) t.link = '';
   if (t.completedAt === undefined) t.completedAt = t.done ? '' : null;
   if (t.kind === undefined) t.kind = 'task';
+  if (t.cost === undefined) t.cost = null;
   return t;
 }
 
@@ -2049,6 +2055,8 @@ function renderDeskMain() {
         onkeydown="handleAddKey(event, '${activeView}')">
       <input class="add-input" id="add-link-${activeView}" type="url" placeholder="Link (optional)" style="flex:1"
         onclick="event.stopPropagation()" onkeydown="handleAddKey(event, '${activeView}')">
+      ${activeView === 'pay' ? `<input class="add-input" id="add-cost-${activeView}" type="number" min="0" step="0.01" placeholder="Amount (₱)" style="flex:0 0 130px"
+        onclick="event.stopPropagation()" onkeydown="handleAddKey(event, '${activeView}')">` : ''}
       ${activeView === 'pay' ? `<select class="add-priority-select" id="add-kind-${activeView}" onclick="event.stopPropagation()">${kindOptionsHtml('payment')}</select>` : ''}
       <select class="add-priority-select" id="add-priority-${activeView}" onclick="event.stopPropagation()">${priorityOptionsHtml('p2')}</select>
       <button class="btn btn-primary" onclick="event.stopPropagation(); addTask('${activeView}')">＋ Add</button>
@@ -2131,6 +2139,7 @@ function taskCardHTML(t) {
         <div class="task-controls">
           <button class="status-btn ${t.status}" onclick="cycleStatus('${t.id}')" title="Click to change status">${STATUS_LABELS[t.status]}</button>
           ${activeView === 'pay' ? `<select class="kind-select kind-${t.kind}" onchange="updateTaskKind('${t.id}', this.value)" title="Task or payment?">${kindOptionsHtml(t.kind)}</select>` : ''}
+          ${activeView === 'pay' && t.kind === 'payment' ? `<input type="number" class="date-input" style="width:100px" min="0" step="0.01" placeholder="Amount ₱" value="${t.cost !== null && t.cost !== undefined ? t.cost : ''}" onchange="updateTaskCost('${t.id}', this.value)" title="Total amount for this payment">` : ''}
           <select class="priority-btn priority-select ${effectivePriority(t)}" ${effectivePriority(t) !== t.priority ? 'title="Past due date — showing as Overdue"' : ''} onchange="updateTaskPriority('${t.id}', this.value)">${priorityOptionsHtml(effectivePriority(t))}</select>
           <input type="date" class="date-input" value="${t.date || ''}" onchange="updateTaskDate('${t.id}', this.value)" title="Due date">
           <button class="delete-btn" onclick="duplicateTask('${t.id}')" title="Duplicate task">⧉</button>
@@ -2177,7 +2186,7 @@ function fmtDisplayDate(isoDate) {
 function eventsForDate(dateStr) {
   const evs = [];
   allTasksFlat().forEach(({t, d}) => {
-    if (t.date === dateStr && !t.done) evs.push({ type:'task', id:t.id, title:t.title, deskIcon:d.icon, deskBg:d.ic_bg, deskColor:d.ic_color, priority:effectivePriority(t) });
+    if (t.date === dateStr) evs.push({ type:'task', id:t.id, title:t.title, deskIcon:d.icon, deskBg:d.ic_bg, deskColor:d.ic_color, priority:effectivePriority(t), done:t.done, kind:t.kind, cost:t.cost });
   });
   (state.meetings || []).forEach(m => {
     if (m.date === dateStr) evs.push({ type:'meeting', id:m.id, title:m.title, time:m.time });
@@ -2206,7 +2215,7 @@ function renderCalendarMain() {
         <div class="cal-daynum">${day}</div>
         <div class="cal-chips">
           ${evs.map(e => e.type==='task'
-            ? `<div class="cal-chip task" style="${deskChipStyle(e.deskBg, e.deskColor)}" draggable="true" ondragstart="dragStart(event,'task','${e.id}')" title="${escHtml(e.title)}"><span>${e.deskIcon} ${escHtml(e.title)}</span></div>`
+            ? `<div class="cal-chip task ${e.done ? 'done' : ''}" style="${deskChipStyle(e.deskBg, e.deskColor)}" ${e.done ? '' : `draggable="true" ondragstart="dragStart(event,'task','${e.id}')"`} title="${escHtml(e.title)}"><span>${e.deskIcon} ${e.kind === 'payment' && e.cost ? fmtCost(e.cost) + ' · ' : ''}${escHtml(e.title)}</span></div>`
             : `<div class="cal-chip meeting" draggable="true" ondragstart="dragStart(event,'meeting','${e.id}')" title="${escHtml(e.title)}"><span>🕐 ${e.time ? e.time + ' · ' : ''}${escHtml(e.title)}</span><span class="chip-del" onclick="event.stopPropagation();deleteMeeting('${e.id}')">✕</span></div>`
           ).join('')}
         </div>
@@ -2246,7 +2255,7 @@ function renderCalendarMain() {
     <div class="unscheduled-tray">
       ${unscheduled.length === 0
         ? `<span style="font-size:12px;color:var(--muted)">Everything's scheduled.</span>`
-        : unscheduled.map(({t,d}) => `<div class="cal-chip task" style="${deskChipStyle(d.ic_bg, d.ic_color)}" draggable="true" ondragstart="dragStart(event,'task','${t.id}')" title="${escHtml(t.title)}"><span>${d.icon} ${escHtml(t.title)}</span></div>`).join('')}
+        : unscheduled.map(({t,d}) => `<div class="cal-chip task" style="${deskChipStyle(d.ic_bg, d.ic_color)}" draggable="true" ondragstart="dragStart(event,'task','${t.id}')" title="${escHtml(t.title)}"><span>${d.icon} ${t.kind === 'payment' && t.cost ? fmtCost(t.cost) + ' · ' : ''}${escHtml(t.title)}</span></div>`).join('')}
     </div>
 
     <div class="cal-scroll">
@@ -2255,62 +2264,9 @@ function renderCalendarMain() {
       </div>
       <div class="cal-grid">${cells}</div>
     </div>
-
-    ${payablesDuesHTML()}
   `;
 
   document.getElementById('main-content').innerHTML = html;
-}
-
-// A dedicated section for company payables & loan dues — pulled from the
-// Payables & loans desk specifically, sorted soonest-first, since bills and
-// debt repayments are the one category where "what's coming up, in order"
-// matters more than seeing them scattered across the month grid.
-function payablesGroupRowsHTML(items) {
-  const payDesk = DESKS.find(d => d.id === 'pay');
-  const dated = items.filter(t => t.date).sort((a, b) => a.date.localeCompare(b.date));
-  const undated = items.filter(t => !t.date);
-  const todayStr = fmtDate(new Date());
-
-  const rows = dated.length
-    ? dated.map(t => {
-        const overdue = t.date < todayStr;
-        const dueToday = t.date === todayStr;
-        return `<div class="cal-chip task" style="width:100%;box-sizing:border-box;margin-bottom:5px;cursor:pointer;${deskChipStyle(payDesk.ic_bg, payDesk.ic_color)}" onclick="switchView('pay')">
-          <span style="font-weight:600;white-space:nowrap">${overdue ? 'Overdue · ' : dueToday ? 'Due today · ' : escHtml(fmtDisplayDate(t.date)) + ' · '}</span>
-          <span>${escHtml(t.title)}</span>
-        </div>`;
-      }).join('')
-    : `<span style="font-size:12px;color:var(--muted)">Nothing with a due date right now.</span>`;
-
-  return { rows, undatedCount: undated.length };
-}
-
-function payablesDuesHTML() {
-  const payDesk = DESKS.find(d => d.id === 'pay');
-  const open = (state.desks.pay || []).filter(t => !t.done);
-  const payments = payablesGroupRowsHTML(open.filter(t => t.kind === 'payment'));
-  const tasks = payablesGroupRowsHTML(open.filter(t => t.kind !== 'payment'));
-
-  return `
-    <div class="section-divider" style="margin-top:20px">
-      <span class="section-divider-label">${payDesk.icon} Payments due</span>
-      <div class="section-divider-line"></div>
-    </div>
-    <div class="card" style="padding:12px">
-      ${payments.rows}
-      ${payments.undatedCount ? `<div style="font-size:11px;color:var(--muted);margin-top:4px">+${payments.undatedCount} more payment${payments.undatedCount === 1 ? '' : 's'} with no due date set yet.</div>` : ''}
-    </div>
-
-    <div class="section-divider" style="margin-top:14px">
-      <span class="section-divider-label">📋 Payables tasks</span>
-      <div class="section-divider-line"></div>
-    </div>
-    <div class="card" style="padding:12px">
-      ${tasks.rows}
-      ${tasks.undatedCount ? `<div style="font-size:11px;color:var(--muted);margin-top:4px">+${tasks.undatedCount} more task${tasks.undatedCount === 1 ? '' : 's'} with no due date set yet.</div>` : ''}
-    </div>
-  `;
 }
 
 function shiftMonth(delta) {
@@ -2990,6 +2946,11 @@ function updateTaskKind(id, kind) {
   if (t) { t.kind = kind; saveState(); renderAll(); }
 }
 
+function updateTaskCost(id, val) {
+  const t = findTask(id);
+  if (t) { const n = parseFloat(val); t.cost = isNaN(n) ? null : n; saveState(); renderAll(); }
+}
+
 function cycleStatus(id) {
   const t = findTask(id);
   if (t) {
@@ -3090,8 +3051,10 @@ function addTask(deskId) {
   const linkInput = document.getElementById('add-link-' + deskId);
   const priSel = document.getElementById('add-priority-' + deskId);
   const kindSel = document.getElementById('add-kind-' + deskId);
+  const costInput = document.getElementById('add-cost-' + deskId);
   const title = input.value.trim();
   if (!title) { input.focus(); return; }
+  const costVal = costInput ? parseFloat(costInput.value) : NaN;
   const newTask = {
     id: deskId + '_' + Date.now(),
     title,
@@ -3103,11 +3066,13 @@ function addTask(deskId) {
     status: 'not-started',
     link: linkInput ? linkInput.value.trim() : '',
     kind: kindSel ? kindSel.value : 'task',
+    cost: isNaN(costVal) ? null : costVal,
   };
   if (!state.desks[deskId]) state.desks[deskId] = [];
   state.desks[deskId].unshift(newTask);
   saveState();
   input.value = '';
+  if (costInput) costInput.value = '';
   if (linkInput) linkInput.value = '';
   renderAll();
 }
