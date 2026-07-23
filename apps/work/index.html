@@ -2831,6 +2831,11 @@ function setLinksSearch(val) {
 
 const LINK_CATS = ['Sheets', 'Docs', 'Slides', 'Drive', 'Other'];
 function linkCatLabel(cat) { return cat === 'Drive' ? 'Drive folder' : cat; }
+function linkCatOptionsHtml(current) {
+  return LINK_CATS.map(c => `<option value="${c}" ${c === current ? 'selected' : ''}>${linkCatLabel(c)}</option>`).join('');
+}
+
+let editingLinkId = null;
 
 function renderLinksMain() {
   const allLinks = state.docLinks || [];
@@ -2855,13 +2860,7 @@ function renderLinksMain() {
     <div class="add-task-area" style="cursor:default">
       <input class="add-input" id="link-label" placeholder="Label (e.g. July P&amp;L — Branch 3)" style="flex:2">
       <input class="add-input" id="link-url" placeholder="https://docs.google.com/…" style="flex:2">
-      <select class="add-priority-select" id="link-cat">
-        <option value="Sheets">Sheets</option>
-        <option value="Docs">Docs</option>
-        <option value="Slides">Slides</option>
-        <option value="Drive">Drive folder</option>
-        <option value="Other">Other</option>
-      </select>
+      <select class="add-priority-select" id="link-cat">${linkCatOptionsHtml('Sheets')}</select>
       <button class="btn btn-primary" onclick="addLink()">Add</button>
     </div>
     <div class="tasks-list">`;
@@ -2872,25 +2871,41 @@ function renderLinksMain() {
     html += `<div class="empty-state"><div class="empty-icon">🔗</div><div class="empty-text">No links match this filter.</div></div>`;
   } else {
     links.forEach(l => {
-      html += `
-        <div class="task-card p4">
-          <div class="task-main">
-            <div class="link-icon">${linkIcon(l.cat)}</div>
-            <div class="task-body">
-              <div class="task-title-row">
-                <span class="task-title-input" contenteditable="true" style="display:block" onblur="editLink('${l.id}','label',this)">${escHtml(l.label)}</span>
+      if (editingLinkId === l.id) {
+        html += `
+          <div class="task-card p4">
+            <div class="task-main">
+              <div class="link-icon">${linkIcon(l.cat)}</div>
+              <div class="task-body" style="display:flex;flex-direction:column;gap:6px">
+                <input class="add-input" id="edit-link-label-${l.id}" value="${escHtml(l.label)}" placeholder="Label">
+                <input class="add-input" id="edit-link-url-${l.id}" type="url" value="${escHtml(l.url)}" placeholder="https://…">
+                <select class="add-priority-select" id="edit-link-cat-${l.id}" style="align-self:flex-start">${linkCatOptionsHtml(l.cat || 'Other')}</select>
               </div>
-              <div style="display:flex;align-items:center;gap:6px;margin-top:2px">
-                <input type="url" class="task-link-input" style="flex:1;font-size:11px" value="${escHtml(l.url)}" onchange="editLinkUrl('${l.id}', this.value)">
-                <a class="notes-toggle task-link-icon" href="${escHtml(l.url)}" target="_blank" rel="noopener" title="Open link">↗</a>
+              <div class="task-controls">
+                <button class="btn btn-primary" onclick="saveLinkEdit('${l.id}')">Save</button>
+                <button class="btn" onclick="cancelLinkEdit()">Cancel</button>
               </div>
             </div>
-            <div class="task-controls">
-              <span class="priority-btn p4">${escHtml(l.cat || 'Other')}</span>
-              <button class="delete-btn" style="opacity:1" onclick="deleteLink('${l.id}')" title="Remove">✕</button>
+          </div>`;
+      } else {
+        html += `
+          <div class="task-card p4">
+            <div class="task-main">
+              <div class="link-icon">${linkIcon(l.cat)}</div>
+              <div class="task-body">
+                <div class="task-title-row">
+                  <span class="task-title-input" style="display:block">${escHtml(l.label)}</span>
+                </div>
+                <a href="${escHtml(l.url)}" target="_blank" rel="noopener" style="font-size:11px;color:var(--navy-light);word-break:break-all">${escHtml(l.url)}</a>
+              </div>
+              <div class="task-controls">
+                <span class="priority-btn p4">${linkCatLabel(l.cat || 'Other')}</span>
+                <button class="delete-btn" style="opacity:1" onclick="toggleLinkEdit('${l.id}')" title="Edit">✎</button>
+                <button class="delete-btn" style="opacity:1" onclick="deleteLink('${l.id}')" title="Remove">✕</button>
+              </div>
             </div>
-          </div>
-        </div>`;
+          </div>`;
+      }
     });
   }
 
@@ -2909,18 +2924,32 @@ function addLink() {
   renderLinksMain();
 }
 
-function editLink(id, field, el) {
-  const l = (state.docLinks || []).find(l => l.id === id);
-  if (l) { l[field] = el.innerText.trim(); saveState(); }
+function toggleLinkEdit(id) {
+  editingLinkId = editingLinkId === id ? null : id;
+  renderLinksMain();
 }
 
-function editLinkUrl(id, val) {
+function cancelLinkEdit() {
+  editingLinkId = null;
+  renderLinksMain();
+}
+
+function saveLinkEdit(id) {
   const l = (state.docLinks || []).find(l => l.id === id);
-  if (l) { l.url = val.trim(); saveState(); renderLinksMain(); }
+  if (!l) return;
+  const label = document.getElementById('edit-link-label-' + id).value.trim();
+  const url = document.getElementById('edit-link-url-' + id).value.trim();
+  const cat = document.getElementById('edit-link-cat-' + id).value;
+  if (!label || !url) return;
+  l.label = label; l.url = url; l.cat = cat;
+  saveState();
+  editingLinkId = null;
+  renderLinksMain();
 }
 
 function deleteLink(id) {
   state.docLinks = (state.docLinks || []).filter(l => l.id !== id);
+  if (editingLinkId === id) editingLinkId = null;
   saveState();
   renderLinksMain();
 }
