@@ -943,8 +943,10 @@
       <p>Everything in one place. Click any item to check it off. Click text to edit it.</p>
     </div>
     <div class="g4" id="overview-stats"></div>
-    <div class="sl">Weekday routine — <span id="routine-stat"></span></div>
+    <div class="sl">Weekday routine — <span id="routine-stat"></span><span id="routine-streak" style="margin-left:6px;color:var(--text3);font-weight:400"></span></div>
     <div class="card" id="routine-checklist"></div>
+    <div class="sl">Money</div>
+    <div class="g3" id="money-stats"></div>
     <div class="sl">Categories — click any to jump in</div>
     <div class="g3" id="category-widgets"></div>
     <div class="sl">Experience domains</div>
@@ -1037,6 +1039,7 @@
     <div class="add-row">
       <input id="topic-title-inp" type="text" placeholder="Topic to study (e.g. Behavioral economics)">
       <button onclick="addStudyTopic()"><i class="ti ti-plus"></i> Add topic</button>
+      <button class="btn" onclick="openQuickAdd('bulkStudyTopics')"><i class="ti ti-list"></i> Bulk add</button>
     </div>
   </div>
 
@@ -1281,6 +1284,7 @@
       <input id="pe-amount-inp" type="number" placeholder="Amount (₱)" style="max-width:110px">
       <input id="pe-due-inp" type="date" style="max-width:150px">
       <button onclick="addPriorityExpense()"><i class="ti ti-plus"></i> Add</button>
+      <button class="btn" onclick="openQuickAdd('bulkPriorityExpense')"><i class="ti ti-list"></i> Bulk add</button>
     </div>
 
     <div class="sl">Expense log — where your money is going</div>
@@ -1302,6 +1306,7 @@
     <div class="page-header">
       <h1>Watchlist</h1>
       <p>Movies, TV shows, and music/albums. Click to mark done, click text to edit.</p>
+      <button class="btn" onclick="openQuickAdd('bulkWatchlist')"><i class="ti ti-list"></i> Bulk add</button>
     </div>
     <div class="sl">Interests breakdown<button class="btn" id="genre-detect-btn" onclick="detectWatchlistGenres()" style="margin-left:8px;padding:2px 10px;font-size:10px"><i class="ti ti-wand"></i> Detect genres</button><span id="genre-detect-status" class="f11 tc" style="margin-left:8px"></span></div>
     <div id="watchlist-genre-charts"></div>
@@ -1325,6 +1330,7 @@
           <div class="ac-wrap"><input id="reading-title-inp" type="text" placeholder="Book title…" autocomplete="off"><div class="ac-dropdown" id="reading-title-inp-ac"></div></div>
           <div class="ac-wrap" style="max-width:160px"><input id="reading-author-inp" type="text" placeholder="Author" autocomplete="off"><div class="ac-dropdown" id="reading-author-inp-ac"></div></div>
           <button onclick="addReading()"><i class="ti ti-plus"></i> Add</button>
+          <button class="btn" onclick="openQuickAdd('bulkReading')"><i class="ti ti-list"></i> Bulk add</button>
         </div>
       </div>
     </div>
@@ -1343,6 +1349,7 @@
       <input id="shopping-qty-inp" type="text" placeholder="Qty / note" style="max-width:110px">
       <input id="shopping-price-inp" type="number" placeholder="Price (₱)" style="max-width:100px">
       <button onclick="addShopping()"><i class="ti ti-plus"></i> Add</button>
+      <button class="btn" onclick="openQuickAdd('bulkShopping')"><i class="ti ti-list"></i> Bulk add</button>
     </div>
     <button class="btn" onclick="clearShoppingDone()" style="margin-top:10px">Clear picked-up items</button>
   </div>
@@ -1391,8 +1398,18 @@
     <div class="sl">Notifications</div>
     <div class="card" style="margin-bottom:1rem">
       <div class="card-title">Alerts: <span id="notif-status-text">off</span></div>
-      <div class="card-desc">Today's calendar events (once a day) and a heads-up shortly before an event starts. Needs cloud sync connected and a calendar feed set up on the Calendar page — otherwise this only works while the app is open.</div>
+      <div class="card-desc">Today's calendar events (once a day) with a heads-up shortly before one starts, plus a once-a-day bills digest and a nudge the moment a priority expense goes overdue. Needs cloud sync connected — the calendar part also needs a feed set up on the Calendar page.</div>
       <div style="margin-top:8px"><button class="btn" id="notif-toggle-btn" onclick="toggleNotifications()">Turn on</button></div>
+    </div>
+    <div class="sl">Backup</div>
+    <div class="card" style="margin-bottom:1rem">
+      <div class="card-title">Local backup</div>
+      <div class="card-desc">Export everything to a file you keep yourself, separate from cloud sync — useful if sync ever breaks or you're switching devices.</div>
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+        <button class="btn" onclick="exportBackup()">Export backup</button>
+        <button class="btn" onclick="document.getElementById('import-file-inp').click()">Import backup</button>
+      </div>
+      <input type="file" id="import-file-inp" accept="application/json" style="display:none" onchange="importBackup(event)">
     </div>
     <div class="sl">Live data API keys (optional)</div>
     <div class="card" style="margin-bottom:1rem">
@@ -1415,6 +1432,7 @@ const DEFAULT = {
   hobbyState: {},
   fitnessLog: {},
   routineLog: {},
+  routineStreak: { count: 0, lastDate: '' },
   fitnessTargets: [
     {icon:"ti-calendar-stats",title:"Recovery spacing",desc:"Mon→Thu and Tue→Fri each give 3 full days before the same region trains again — ideal for knee-priority work"},
     {icon:"ti-scale",title:"Weight target",desc:"68–72 kg · currently fluctuating 79–84 kg · fat loss phase active"},
@@ -2042,6 +2060,41 @@ function saveState() {
   schedulePush();
 }
 
+function exportBackup() {
+  const payload = { exportedAt: new Date().toISOString(), version: STORAGE_KEY, state: STATE };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `jhabes-life-os-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importBackup(ev) {
+  const file = ev.target.files[0];
+  ev.target.value = '';
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const parsed = JSON.parse(reader.result);
+      const incoming = parsed.state || parsed; // accept raw state or a wrapped export
+      if (!incoming || typeof incoming !== 'object') throw new Error('not a valid backup');
+      if (!confirm('Import this backup? It will replace everything currently saved in this browser.')) return;
+      STATE = Object.assign({}, DEFAULT, incoming);
+      migrateHomes(STATE);
+      saveState();
+      renderSidebar();
+      if (PAGE_RENDERS[currentPage]) PAGE_RENDERS[currentPage]();
+      alert('Backup imported.');
+    } catch (e) {
+      alert("Could not read that file — make sure it's a backup exported from this dashboard.");
+    }
+  };
+  reader.readAsText(file);
+}
+
 let STATE = loadState();
 let CURRENT_PASS_HASH = null;
 let SYNC_STATUS = 'local'; // local | synced | error
@@ -2415,6 +2468,64 @@ function buildCommands() {
   return cmds;
 }
 
+function stripHtmlTags(html) {
+  return String(html || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+// Cmd+K otherwise only matches page names and quick-add labels — this makes
+// it also find things actually written into the dashboard (a journal entry,
+// a goal, a book on the reading list), so typing a word finds the content
+// wherever it lives instead of requiring you to already know which page.
+function buildContentResults(q) {
+  const results = [];
+
+  (STATE.journalEntries || []).forEach(e => {
+    const plain = stripHtmlTags(e.text);
+    if ((e.title || "").toLowerCase().includes(q) || plain.toLowerCase().includes(q)) {
+      results.push({ label: escHtml(e.title || plain.slice(0, 60) || "Untitled entry"), hint: "Journal", icon: "ti-notebook", action: () => setPage("journal") });
+    }
+  });
+  (STATE.goals || []).forEach(g => {
+    if ((g.text || "").toLowerCase().includes(q)) {
+      results.push({ label: escHtml(g.text), hint: "Goal", icon: "ti-target", action: () => setPage("goals") });
+    }
+  });
+  (STATE.studyTopics || []).forEach(t => {
+    if ((t.title || "").toLowerCase().includes(q)) {
+      results.push({ label: escHtml(t.title), hint: "Study topic", icon: "ti-school", action: () => setPage("education") });
+    }
+  });
+  (STATE.priorityExpenses || []).forEach(p => {
+    if ((p.title || "").toLowerCase().includes(q)) {
+      results.push({ label: escHtml(p.title), hint: "Priority expense", icon: "ti-alert-circle", action: () => setPage("portfolio") });
+    }
+  });
+  (STATE.savingsGoals || []).forEach(g => {
+    if ((g.name || "").toLowerCase().includes(q)) {
+      results.push({ label: escHtml(g.name), hint: "Savings goal", icon: "ti-piggy-bank", action: () => setPage("portfolio") });
+    }
+  });
+  (STATE.readingList || []).forEach(b => {
+    if ((b.title || "").toLowerCase().includes(q) || (b.author || "").toLowerCase().includes(q)) {
+      results.push({ label: escHtml(b.title), hint: "Reading", icon: "ti-books", action: () => setPage("reading") });
+    }
+  });
+  ["movies", "tv", "music"].forEach(cat => {
+    ((STATE.watchlist || {})[cat] || []).forEach(item => {
+      if ((item.title || "").toLowerCase().includes(q)) {
+        results.push({ label: escHtml(item.title), hint: "Watchlist · " + cat, icon: "ti-device-tv", action: () => setPage("watchlist") });
+      }
+    });
+  });
+  (STATE.shoppingList || []).forEach(s => {
+    if ((s.item || "").toLowerCase().includes(q)) {
+      results.push({ label: escHtml(s.item), hint: "Shopping list", icon: "ti-shopping-cart", action: () => setPage("shopping") });
+    }
+  });
+
+  return results;
+}
+
 let cmdkSelIndex = 0;
 let cmdkFiltered = [];
 
@@ -2431,7 +2542,7 @@ function closeCmdK() {
 function renderCmdKResults() {
   const q = document.getElementById('cmdk-input').value.trim().toLowerCase();
   const all = buildCommands();
-  cmdkFiltered = q ? all.filter(c => c.label.toLowerCase().includes(q)) : all;
+  cmdkFiltered = q ? all.filter(c => c.label.toLowerCase().includes(q)).concat(buildContentResults(q)) : all;
   cmdkSelIndex = 0;
   const el = document.getElementById('cmdk-results');
   el.innerHTML = cmdkFiltered.length
@@ -2516,16 +2627,44 @@ function isWeekday(date) {
   const d = date.getDay();
   return d >= 1 && d <= 5;
 }
+// The routine is weekday-only, so a streak's "yesterday" needs to skip
+// weekends — otherwise every Monday would reset a streak that was actually
+// unbroken since Friday.
+function previousWeekday(date) {
+  const d = new Date(date);
+  do { d.setDate(d.getDate() - 1); } while (!isWeekday(d));
+  return d;
+}
+
+function updateRoutineStreak(iso, allDone) {
+  if (!STATE.routineStreak) STATE.routineStreak = { count: 0, lastDate: '' };
+  if (!allDone) {
+    // Only actually breaks the streak if today was the day it would have
+    // extended — unchecking a box on some other already-passed day
+    // shouldn't retroactively wipe today's progress.
+    if (STATE.routineStreak.lastDate === iso) STATE.routineStreak = { count: 0, lastDate: '' };
+    return;
+  }
+  if (STATE.routineStreak.lastDate === iso) return;
+  const prevWeekdayIso = previousWeekday(new Date(iso + 'T00:00:00')).toISOString().slice(0, 10);
+  STATE.routineStreak.count = STATE.routineStreak.lastDate === prevWeekdayIso ? STATE.routineStreak.count + 1 : 1;
+  STATE.routineStreak.lastDate = iso;
+}
+
 function toggleRoutineItem(i) {
   const iso = new Date().toISOString().slice(0, 10);
   if (!STATE.routineLog) STATE.routineLog = {};
   if (!STATE.routineLog[iso]) STATE.routineLog[iso] = {};
   STATE.routineLog[iso][i] = !STATE.routineLog[iso][i];
+  const checkableIdx = ROUTINE_ITEMS.map((r, ri) => r.noCheck ? -1 : ri).filter(ri => ri >= 0);
+  const allDone = checkableIdx.every(ri => STATE.routineLog[iso][ri]);
+  updateRoutineStreak(iso, allDone);
   saveState(); renderRoutineChecklist();
 }
 function renderRoutineChecklist() {
   const el = document.getElementById("routine-checklist");
   const statEl = document.getElementById("routine-stat");
+  const streakEl = document.getElementById("routine-streak");
   if (!el) return;
   const now = new Date();
   const iso = now.toISOString().slice(0, 10);
@@ -2533,6 +2672,11 @@ function renderRoutineChecklist() {
   const todayLog = STATE.routineLog[iso] || {};
   const checkableIdx = ROUTINE_ITEMS.map((r, i) => r.noCheck ? -1 : i).filter(i => i >= 0);
   const doneCount = checkableIdx.filter(i => todayLog[i]).length;
+
+  if (streakEl) {
+    const streak = STATE.routineStreak && STATE.routineStreak.count > 0 ? STATE.routineStreak.count : 0;
+    streakEl.textContent = streak > 0 ? `· 🔥 ${streak}-day streak` : '';
+  }
 
   if (!isWeekday(now)) {
     if (statEl) statEl.textContent = "weekend";
@@ -2558,12 +2702,46 @@ function renderRoutineChecklist() {
   }).join("");
 }
 
+// Pulls together the three money pages (Expense Budget, Priority expenses,
+// Savings goals) that Overview otherwise doesn't reflect at all — same
+// numbers those pages already compute, just surfaced where the day starts.
+function renderMoneyRollup() {
+  const el = document.getElementById("money-stats");
+  if (!el) return;
+  const balance = expenseBudgetBalance();
+  const priorityItems = STATE.priorityExpenses || [];
+  const priorityTotal = priorityItems.reduce((s, p) => s + (p.amount || 0), 0);
+  const today = new Date().toISOString().slice(0, 10);
+  const overdueCount = priorityItems.filter(p => p.due && p.due < today).length;
+  const savingsGoals = STATE.savingsGoals || [];
+  const totalSaved = savingsGoals.reduce((s, g) => s + (g.current || 0), 0);
+  const totalTarget = savingsGoals.reduce((s, g) => s + (g.target || 0), 0);
+  const savingsPct = totalTarget ? Math.round(totalSaved / totalTarget * 100) : 0;
+
+  el.innerHTML = `
+    <div class="stat-card" style="cursor:pointer" onclick="setPage('portfolio')">
+      <div class="stat-val" style="color:${balance >= 0 ? "var(--green)" : "var(--coral)"}">${fmtPeso(balance)}</div>
+      <div class="stat-lbl">budget balance</div>
+    </div>
+    <div class="stat-card" style="cursor:pointer" onclick="setPage('portfolio')">
+      <div class="stat-val" style="color:${overdueCount > 0 ? "var(--coral)" : ""}">${fmtPeso(priorityTotal)}</div>
+      <div class="stat-lbl">${priorityItems.length} bill${priorityItems.length === 1 ? "" : "s"} owed${overdueCount ? " · " + overdueCount + " overdue" : ""}</div>
+    </div>
+    <div class="stat-card" style="cursor:pointer" onclick="setPage('portfolio')">
+      <div class="stat-val">${fmtPeso(totalSaved)}</div>
+      <div class="stat-lbl">saved · ${savingsPct}% of goal</div>
+    </div>
+  `;
+}
+
 function renderOverview() {
   const all = allHobbies();
   const tried = all.filter(h => STATE.hobbyState[h] !== "none").length;
   const mastered = all.filter(h => STATE.hobbyState[h] === "mastered").length;
   const goals = STATE.goals.filter(g => g.done).length;
   const places = STATE.travelList.filter(t => STATE.travelState[t.n]).length;
+
+  renderMoneyRollup();
 
   document.getElementById("overview-stats").innerHTML = `
     <div class="stat-card"><div class="stat-val">${tried}</div><div class="stat-lbl">hobbies tried</div></div>
@@ -3883,7 +4061,112 @@ const QUICK_ADD_CONFIG = {
       return true;
     },
   },
+  bulkShopping: {
+    title: "Bulk add — shopping list",
+    body: () => `<div class="f11 tc" style="margin-bottom:6px">One per line: Item, Qty, Price (qty and price optional).</div><textarea id="qa-f1" placeholder="Milk, 2, 120"></textarea>`,
+    submit: () => {
+      const lines = document.getElementById('qa-f1').value.split('\n').map(l => l.trim()).filter(Boolean);
+      if (!lines.length) return false;
+      if (!STATE.shoppingList) STATE.shoppingList = [];
+      lines.forEach(line => {
+        const parts = line.includes('\t') ? line.split('\t') : line.split(',');
+        const item = (parts[0] || '').trim();
+        if (!item) return;
+        const qty = (parts[1] || '').trim();
+        const price = parseFloat(parts[2]) || 0;
+        STATE.shoppingList.push({ item, qty, price, done: false });
+      });
+      saveState(); renderShopping();
+      return true;
+    },
+  },
+  bulkReading: {
+    title: "Bulk add — reading list",
+    body: () => `<div class="f11 tc" style="margin-bottom:6px">One per line: Title, Author (author optional).</div><textarea id="qa-f1" placeholder="Sapiens, Yuval Noah Harari"></textarea>`,
+    submit: () => {
+      const lines = document.getElementById('qa-f1').value.split('\n').map(l => l.trim()).filter(Boolean);
+      if (!lines.length) return false;
+      if (!STATE.readingList) STATE.readingList = [];
+      lines.forEach(line => {
+        const parts = line.includes('\t') ? line.split('\t') : line.split(',');
+        const title = (parts[0] || '').trim();
+        if (!title) return;
+        const author = (parts[1] || '').trim();
+        STATE.readingList.push({ title, author, genre: "", done: false });
+      });
+      saveState(); renderReading();
+      return true;
+    },
+  },
+  bulkWatchlist: {
+    title: "Bulk add — watchlist",
+    body: () => `
+      <div class="add-row" style="margin-top:0"><select id="qa-f2"><option value="movies">Movies</option><option value="tv">TV shows</option><option value="music">Music / albums</option></select></div>
+      <div class="f11 tc" style="margin:6px 0">One per line: Title, Person (director/artist — optional).</div>
+      <textarea id="qa-f1" placeholder="Inception, Christopher Nolan"></textarea>`,
+    submit: () => {
+      const cat = document.getElementById('qa-f2').value;
+      const lines = document.getElementById('qa-f1').value.split('\n').map(l => l.trim()).filter(Boolean);
+      if (!lines.length) return false;
+      if (!STATE.watchlist) STATE.watchlist = { movies: [], tv: [], music: [] };
+      if (!STATE.watchlist[cat]) STATE.watchlist[cat] = [];
+      lines.forEach(line => {
+        const parts = line.includes('\t') ? line.split('\t') : line.split(',');
+        const title = (parts[0] || '').trim();
+        if (!title) return;
+        const person = (parts[1] || '').trim();
+        STATE.watchlist[cat].push({ title, person, genre: "", done: false });
+      });
+      saveState(); renderWatchlist();
+      return true;
+    },
+  },
+  bulkPriorityExpense: {
+    title: "Bulk add — priority expenses",
+    body: () => `<div class="f11 tc" style="margin-bottom:6px">One per line: Title, Amount, Due date (date optional — YYYY-MM-DD or M/D/YYYY).</div><textarea id="qa-f1" placeholder="Electric bill, 3500, 2026-08-05"></textarea>`,
+    submit: () => {
+      const lines = document.getElementById('qa-f1').value.split('\n').map(l => l.trim()).filter(Boolean);
+      if (!lines.length) return false;
+      if (!STATE.priorityExpenses) STATE.priorityExpenses = [];
+      lines.forEach(line => {
+        const parts = line.includes('\t') ? line.split('\t') : line.split(',');
+        const title = (parts[0] || '').trim();
+        if (!title) return;
+        const amount = parseFloat(parts[1]) || 0;
+        const due = parts[2] !== undefined ? parseFlexibleDateJm1(parts[2]) : '';
+        STATE.priorityExpenses.push({ title, amount, due });
+      });
+      saveState(); renderPriorityExpenses(); renderMoneyRollup();
+      return true;
+    },
+  },
+  bulkStudyTopics: {
+    title: "Bulk add — study topics",
+    body: () => `<div class="f11 tc" style="margin-bottom:6px">One topic per line.</div><textarea id="qa-f1" placeholder="Machine learning fundamentals"></textarea>`,
+    submit: () => {
+      const lines = document.getElementById('qa-f1').value.split('\n').map(l => l.trim()).filter(Boolean);
+      if (!lines.length) return false;
+      if (!STATE.studyTopics) STATE.studyTopics = [];
+      lines.forEach(title => STATE.studyTopics.push({ title, items: [] }));
+      saveState(); renderStudyTopics();
+      return true;
+    },
+  },
 };
+
+// Accepts "YYYY-MM-DD" or "M/D/YYYY"; falls back to whatever Date can parse.
+function parseFlexibleDateJm1(s) {
+  s = (s || '').trim();
+  if (!s) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const mdy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s);
+  if (mdy) {
+    const [, m, d, y] = mdy;
+    return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+  const dt = new Date(s);
+  return isNaN(dt.getTime()) ? '' : dt.toISOString().slice(0, 10);
+}
 
 function openQuickAdd(type) {
   const cfg = QUICK_ADD_CONFIG[type];
@@ -4085,15 +4368,15 @@ function renderSavingsGoals() {
 function editSavingsGoal(i, key, el) {
   if (key === "name") STATE.savingsGoals[i].name = el.innerText.trim() || "Untitled project";
   else STATE.savingsGoals[i][key] = parseFloat(el.innerText.replace(/[^0-9.-]/g, "")) || 0;
-  saveState(); renderSavingsGoals();
+  saveState(); renderSavingsGoals(); renderMoneyRollup();
 }
-function deleteSavingsGoal(i) { STATE.savingsGoals.splice(i, 1); saveState(); renderSavingsGoals(); }
+function deleteSavingsGoal(i) { STATE.savingsGoals.splice(i, 1); saveState(); renderSavingsGoals(); renderMoneyRollup(); }
 function addSavingsGoal() {
   const n = document.getElementById("sv-name-inp"), t = document.getElementById("sv-target-inp"), c = document.getElementById("sv-current-inp");
   if (!n.value.trim()) return;
   STATE.savingsGoals.push({ name: n.value.trim(), target: parseFloat(t.value) || 0, current: parseFloat(c.value) || 0 });
   n.value = ""; t.value = ""; c.value = "";
-  saveState(); renderSavingsGoals();
+  saveState(); renderSavingsGoals(); renderMoneyRollup();
 }
 
 function expenseSlicesFor(items) {
@@ -4231,11 +4514,11 @@ function addBudgetDeposit() {
     amount: parseFloat(a.value) || 0,
   });
   a.value = ""; n.value = "";
-  saveState(); renderBudget(); renderPortfolioOverview();
+  saveState(); renderBudget(); renderPortfolioOverview(); renderMoneyRollup();
 }
 function deleteBudgetDeposit(i) {
   STATE.expenseBudget.deposits.splice(i, 1);
-  saveState(); renderBudget(); renderPortfolioOverview();
+  saveState(); renderBudget(); renderPortfolioOverview(); renderMoneyRollup();
 }
 
 // ─── PRIORITY EXPENSES ───────────────────────────────────────────────────────
@@ -4264,9 +4547,9 @@ function addPriorityExpense() {
   if (!t.value.trim()) return;
   STATE.priorityExpenses.push({ title: t.value.trim(), amount: parseFloat(a.value) || 0, due: d.value || "" });
   t.value = ""; a.value = ""; d.value = "";
-  saveState(); renderPriorityExpenses();
+  saveState(); renderPriorityExpenses(); renderMoneyRollup();
 }
-function deletePriorityExpense(i) { STATE.priorityExpenses.splice(i, 1); saveState(); renderPriorityExpenses(); }
+function deletePriorityExpense(i) { STATE.priorityExpenses.splice(i, 1); saveState(); renderPriorityExpenses(); renderMoneyRollup(); }
 function markPriorityExpensePaid(i) {
   const p = STATE.priorityExpenses[i];
   STATE.expenses.push({
@@ -4276,7 +4559,7 @@ function markPriorityExpensePaid(i) {
     amount: p.amount || 0,
   });
   STATE.priorityExpenses.splice(i, 1);
-  saveState(); renderPriorityExpenses(); renderExpenses();
+  saveState(); renderPriorityExpenses(); renderExpenses(); renderMoneyRollup();
 }
 
 // ─── PORTFOLIO OVERVIEW ──────────────────────────────────────────────────────
