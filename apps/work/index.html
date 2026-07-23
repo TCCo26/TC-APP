@@ -1463,13 +1463,16 @@ function normalizeTask(t) {
   if (t.completedAt === undefined) t.completedAt = t.done ? '' : null;
   if (t.kind === undefined) t.kind = 'task';
   if (t.cost === undefined) t.cost = null;
+  // Legacy tasks (saved before this field existed) default to today rather
+  // than an unknown past date, so they don't immediately show as stale.
+  if (t.createdAt === undefined) t.createdAt = fmtDate(new Date());
   return t;
 }
 
 function freshDefaultState() {
   const desks = JSON.parse(JSON.stringify(DEFAULT_TASKS));
   Object.keys(desks).forEach(k => desks[k].forEach(normalizeTask));
-  return { desks, meetings: [], docLinks: [], notes: [], morningCheck: { date: '', desks: [] } };
+  return { desks, meetings: [], docLinks: [], notes: [], morningCheck: { date: '', desks: [] }, checklistStreak: { count: 0, lastDate: '' } };
 }
 
 // One-time migration: browsers with data saved before the "Legal and
@@ -1501,6 +1504,7 @@ function loadState() {
       if (!parsed.docLinks) parsed.docLinks = [];
       if (!parsed.notes) parsed.notes = [];
       if (!parsed.morningCheck) parsed.morningCheck = { date: '', desks: [] };
+      if (!parsed.checklistStreak) parsed.checklistStreak = { count: 0, lastDate: '' };
       return parsed;
     }
   } catch(e) {}
@@ -1605,14 +1609,60 @@ function closeModal() {
 
 // ── GLOBAL SEARCH ──────────────────────────────────────────────────────────────
 
-function searchTasks(query) {
+function stripHtml(html) {
+  return (html || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+// One combined search across everything the dashboard holds — tasks, the
+// notes log, document links, and meetings — tagged by kind so results can
+// route to the right page/entry when clicked.
+function searchAll(query) {
   const q = query.trim().toLowerCase();
   if (!q) return [];
-  return allTasksFlat().filter(({t}) =>
-    (t.title || '').toLowerCase().includes(q) ||
-    (t.meta || '').toLowerCase().includes(q) ||
-    (t.notes || '').toLowerCase().includes(q)
-  );
+  const results = [];
+
+  allTasksFlat().forEach(({t, d}) => {
+    if ((t.title || '').toLowerCase().includes(q) || (t.meta || '').toLowerCase().includes(q) || (t.notes || '').toLowerCase().includes(q)) {
+      results.push({ kind: 'task', t, d });
+    }
+  });
+
+  (state.notes || []).forEach(n => {
+    const plain = stripHtml(n.html);
+    if ((n.title || '').toLowerCase().includes(q) || plain.toLowerCase().includes(q) || (n.tags || []).some(tag => tag.toLowerCase().includes(q))) {
+      results.push({ kind: 'note', n, snippet: plain.slice(0, 90) });
+    }
+  });
+
+  (state.docLinks || []).forEach(l => {
+    if ((l.label || '').toLowerCase().includes(q) || (l.url || '').toLowerCase().includes(q)) {
+      results.push({ kind: 'link', l });
+    }
+  });
+
+  (state.meetings || []).forEach(m => {
+    if ((m.title || '').toLowerCase().includes(q)) {
+      results.push({ kind: 'meeting', m });
+    }
+  });
+
+  return results;
+}
+
+function openSearchResult(r) {
+  closeModal();
+  if (r.kind === 'task') {
+    switchView(r.d.id);
+  } else if (r.kind === 'note') {
+    currentNoteId = r.n.id;
+    switchView('notes');
+  } else if (r.kind === 'link') {
+    switchView('links');
+  } else if (r.kind === 'meeting') {
+    const d = new Date(r.m.date + 'T00:00:00');
+    calYear = d.getFullYear(); calMonth = d.getMonth();
+    switchView('calendar');
+  }
 }
 
 function openSearchModal() {
@@ -1620,13 +1670,13 @@ function openSearchModal() {
     <div class="modal-overlay" onclick="if(event.target===this) closeModal()">
       <div class="modal-panel">
         <div class="modal-header">
-          <div class="modal-title">Search tasks</div>
+          <div class="modal-title">Search</div>
           <button class="delete-btn" style="opacity:1" onclick="closeModal()">✕</button>
         </div>
         <div style="padding:12px 18px 0">
           <input type="text" id="search-input" class="add-input"
             style="border:1px solid var(--border-strong);border-radius:7px;padding:8px 10px;width:100%"
-            placeholder="Search by title, description, or notes…"
+            placeholder="Search tasks, notes, links, meetings…"
             oninput="renderSearchResults(this.value)">
         </div>
         <div class="modal-list" id="search-results"></div>
@@ -1643,22 +1693,55 @@ function renderSearchResults(query) {
   if (!container) return;
   const q = query.trim();
   if (!q) {
-    container.innerHTML = `<div class="empty-state"><div class="empty-icon">🔎</div><div class="empty-text">Start typing to search tasks across every desk.</div></div>`;
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">🔎</div><div class="empty-text">Start typing to search across tasks, notes, links, and meetings.</div></div>`;
     return;
   }
-  const results = searchTasks(q);
+  const results = searchAll(q);
   if (results.length === 0) {
-    container.innerHTML = `<div class="empty-state"><div class="empty-icon">∅</div><div class="empty-text">No tasks match "${escHtml(q)}".</div></div>`;
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">∅</div><div class="empty-text">Nothing matches "${escHtml(q)}".</div></div>`;
     return;
   }
-  container.innerHTML = results.map(({t, d}) => `
-    <div class="modal-item" onclick="closeModal(); switchView('${d.id}')">
-      <div class="priority-btn ${effectivePriority(t)}" style="pointer-events:none">${PRIORITY_LABELS[effectivePriority(t)]}</div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:10px;color:var(--muted);font-weight:600">${d.icon} ${d.name}${t.done ? ' · Done' : ''}</div>
-        <div style="font-size:13px;color:var(--text)">${escHtml(t.title)}</div>
-      </div>
-    </div>`).join('');
+  container.innerHTML = results.map((r, i) => {
+    if (r.kind === 'task') {
+      const { t, d } = r;
+      return `
+        <div class="modal-item" onclick="openSearchResult(searchAll(document.getElementById('search-input').value)[${i}])">
+          <div class="priority-btn ${effectivePriority(t)}" style="pointer-events:none">${PRIORITY_LABELS[effectivePriority(t)]}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:10px;color:var(--muted);font-weight:600">${d.icon} ${d.name}${t.done ? ' · Done' : ''}</div>
+            <div style="font-size:13px;color:var(--text)">${escHtml(t.title)}</div>
+          </div>
+        </div>`;
+    }
+    if (r.kind === 'note') {
+      return `
+        <div class="modal-item" onclick="openSearchResult(searchAll(document.getElementById('search-input').value)[${i}])">
+          <div class="priority-btn p4" style="pointer-events:none">📝 Note</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:10px;color:var(--muted);font-weight:600">${fmtDisplayDate(r.n.date)}</div>
+            <div style="font-size:13px;color:var(--text)">${escHtml(r.n.title || r.snippet || '(untitled entry)')}</div>
+          </div>
+        </div>`;
+    }
+    if (r.kind === 'link') {
+      return `
+        <div class="modal-item" onclick="openSearchResult(searchAll(document.getElementById('search-input').value)[${i}])">
+          <div class="priority-btn p4" style="pointer-events:none">🔗 Link</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:10px;color:var(--muted);font-weight:600">${linkCatLabel(r.l.cat || 'Other')}</div>
+            <div style="font-size:13px;color:var(--text)">${escHtml(r.l.label)}</div>
+          </div>
+        </div>`;
+    }
+    return `
+      <div class="modal-item" onclick="openSearchResult(searchAll(document.getElementById('search-input').value)[${i}])">
+        <div class="priority-btn p4" style="pointer-events:none">🕐 Meeting</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:10px;color:var(--muted);font-weight:600">${fmtDisplayDate(r.m.date)}${r.m.time ? ' · ' + r.m.time : ''}</div>
+          <div style="font-size:13px;color:var(--text)">${escHtml(r.m.title)}</div>
+        </div>
+      </div>`;
+  }).join('');
 }
 
 document.addEventListener('keydown', (e) => {
@@ -1903,8 +1986,22 @@ function toggleMorningCheck(deskId) {
   ensureMorningCheckFresh();
   const i = state.morningCheck.desks.indexOf(deskId);
   if (i === -1) state.morningCheck.desks.push(deskId); else state.morningCheck.desks.splice(i, 1);
+  updateChecklistStreak();
   saveState();
   renderOverviewMain();
+}
+
+// Advances the streak the first time all desks get reviewed on a given day;
+// doesn't reverse it if a desk gets unchecked again afterward — this is a
+// light habit-tracking nudge, not an audit trail.
+function updateChecklistStreak() {
+  const today = fmtDate(new Date());
+  if (!DESKS.every(d => state.morningCheck.desks.includes(d.id))) return;
+  if (!state.checklistStreak) state.checklistStreak = { count: 0, lastDate: '' };
+  if (state.checklistStreak.lastDate === today) return;
+  const yesterday = fmtDate(new Date(Date.now() - 86400000));
+  state.checklistStreak.count = state.checklistStreak.lastDate === yesterday ? state.checklistStreak.count + 1 : 1;
+  state.checklistStreak.lastDate = today;
 }
 
 function resetMorningChecklist() {
@@ -1939,7 +2036,9 @@ function renderMorningChecklist() {
   return `
     <div class="checklist-card">
       <div class="checklist-header">
-        <div class="checklist-title">☀️ Morning checklist — ${checkedCount} of ${DESKS.length} desks reviewed</div>
+        <div class="checklist-title">☀️ Morning checklist — ${checkedCount} of ${DESKS.length} desks reviewed
+          ${state.checklistStreak && state.checklistStreak.count > 0 ? `<span style="font-size:11px;color:var(--muted);font-weight:400;margin-left:6px">🔥 ${state.checklistStreak.count}-day streak</span>` : ''}
+        </div>
         <button class="btn" style="font-size:11px;padding:4px 8px" onclick="resetMorningChecklist()">Reset</button>
       </div>
       <div class="checklist-track"><div class="checklist-fill" style="width:${pct}%"></div></div>
@@ -1947,16 +2046,104 @@ function renderMorningChecklist() {
     </div>`;
 }
 
+function payablesRollup() {
+  const today = fmtDate(new Date());
+  const weekEnd = fmtDate(new Date(Date.now() + 7 * 86400000));
+  const open = (state.desks.pay || []).filter(t => !t.done && t.kind === 'payment' && typeof t.cost === 'number');
+  const total = open.reduce((sum, t) => sum + t.cost, 0);
+  const overdue = open.filter(t => t.date && t.date < today).reduce((sum, t) => sum + t.cost, 0);
+  const dueThisWeek = open.filter(t => t.date && t.date >= today && t.date <= weekEnd).reduce((sum, t) => sum + t.cost, 0);
+  return { total, overdue, dueThisWeek, count: open.length };
+}
+
+function buildDailyBriefText() {
+  const today = fmtDate(new Date());
+  const lines = [`Qualitech Philippines — Morning brief — ${fmtDisplayDate(today)}`, ''];
+
+  const overdue = [], dueToday = [];
+  DESKS.forEach(d => {
+    (state.desks[d.id] || []).forEach(t => {
+      if (t.done) return;
+      if (effectivePriority(t) === 'p1') overdue.push({ t, d });
+      else if (t.date === today) dueToday.push({ t, d });
+    });
+  });
+
+  lines.push(`OVERDUE (${overdue.length})`);
+  lines.push(...(overdue.length ? overdue.map(({t, d}) => `  • [${d.name}] ${t.title}`) : ['  None.']));
+  lines.push('', `DUE TODAY (${dueToday.length})`);
+  lines.push(...(dueToday.length ? dueToday.map(({t, d}) => `  • [${d.name}] ${t.title}`) : ['  None.']));
+
+  const rollup = payablesRollup();
+  const payDue = (state.desks.pay || []).filter(t => !t.done && t.kind === 'payment' && t.date && t.date <= today);
+  lines.push('', `PAYABLES — ${fmtCost(rollup.total)} outstanding, ${fmtCost(rollup.overdue)} overdue`);
+  lines.push(...(payDue.length ? payDue.map(t => `  • ${t.title}${typeof t.cost === 'number' ? ' — ' + fmtCost(t.cost) : ''}`) : ['  Nothing due or overdue today.']));
+
+  const meetingsToday = (state.meetings || []).filter(m => m.date === today).sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+  lines.push('', `MEETINGS TODAY (${meetingsToday.length})`);
+  lines.push(...(meetingsToday.length ? meetingsToday.map(m => `  • ${m.time ? m.time + ' — ' : ''}${m.title}`) : ['  None.']));
+
+  return lines.join('\n');
+}
+
+function openDailyBriefModal() {
+  const text = buildDailyBriefText();
+  const html = `
+    <div class="modal-overlay" onclick="if(event.target===this) closeModal()">
+      <div class="modal-panel" style="max-width:480px">
+        <div class="modal-header">
+          <div class="modal-title">Today's brief</div>
+          <button class="delete-btn" style="opacity:1" onclick="closeModal()">✕</button>
+        </div>
+        <div style="padding:12px 18px 18px">
+          <textarea id="daily-brief-text" readonly rows="14" style="width:100%;box-sizing:border-box;font-family:ui-monospace,monospace;font-size:12px;padding:10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);white-space:pre-wrap" onclick="this.select()">${escHtml(text)}</textarea>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:10px">
+            <span id="daily-brief-status" style="font-size:11px;color:var(--muted)">Click the box to select all, or use the button.</span>
+            <button class="btn btn-primary" style="flex-shrink:0" onclick="copyDailyBrief()">📋 Copy</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modal-root').innerHTML = html;
+}
+
+function copyDailyBrief() {
+  const ta = document.getElementById('daily-brief-text');
+  const text = ta ? ta.value : buildDailyBriefText();
+  const status = document.getElementById('daily-brief-status');
+  const setStatus = (ok) => { if (status) status.textContent = ok ? '✓ Copied to clipboard.' : 'Could not copy automatically — select the text above and copy it manually.'; };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => setStatus(true)).catch(() => setStatus(false));
+  } else {
+    setStatus(false);
+  }
+}
+
 function renderOverviewMain() {
+  const rollup = payablesRollup();
   let html = `
     <div class="desk-header">
       <div class="desk-title-area">
         <div class="desk-title">🏢 Company overview</div>
         <div class="desk-desc">Aggregate snapshot across all desks — start here each morning.</div>
       </div>
+      <div class="desk-actions">
+        <button class="btn" onclick="openDailyBriefModal()">📋 Copy today's brief</button>
+      </div>
     </div>`;
 
   html += renderMorningChecklist();
+
+  if (rollup.count > 0) {
+    html += `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:16px;display:flex;gap:28px;flex-wrap:wrap;align-items:center">
+        <div style="font-size:12px;font-weight:600;color:var(--text-2)">🧾 Payables outstanding</div>
+        <div><div style="font-size:10px;color:var(--muted)">Total outstanding</div><div style="font-size:16px;font-weight:700">${fmtCost(rollup.total)}</div></div>
+        ${rollup.overdue > 0 ? `<div><div style="font-size:10px;color:var(--muted)">Overdue</div><div style="font-size:16px;font-weight:700;color:var(--p1-color)">${fmtCost(rollup.overdue)}</div></div>` : ''}
+        <div><div style="font-size:10px;color:var(--muted)">Due within 7 days</div><div style="font-size:16px;font-weight:700">${fmtCost(rollup.dueThisWeek)}</div></div>
+        <button class="btn" style="margin-left:auto;font-size:11px;padding:4px 8px" onclick="switchView('pay')">View →</button>
+      </div>`;
+  }
 
   html += `<div class="ov-grid">`;
 
@@ -2135,6 +2322,7 @@ function taskCardHTML(t) {
               ${t.link ? '✎ Edit link' : '+ Link'}
             </button>
             ${t.done ? `<span style="font-size:11px;color:var(--muted);margin-left:auto">✓ Completed ${t.completedAt ? fmtDisplayDate(t.completedAt) : '(before this was tracked)'}</span>` : ''}
+            ${isStale(t) ? `<span style="font-size:11px;color:var(--muted);margin-left:auto" title="No changes in ${daysSince(t.createdAt)} days">🕸 Stale · ${daysSince(t.createdAt)}d</span>` : ''}
           </div>
         </div>
         <div class="task-controls">
@@ -2182,6 +2370,19 @@ function fmtDisplayDate(isoDate) {
   const now = new Date();
   const base = `${MONTH_NAMES[d.getMonth()].slice(0,3)} ${d.getDate()}`;
   return d.getFullYear() === now.getFullYear() ? base : `${base}, ${d.getFullYear()}`;
+}
+
+// Open tasks sitting untouched this long are flagged as stale — a nudge to
+// either act on them or consciously deprioritize/delete them.
+const STALE_DAYS = 14;
+function daysSince(isoDate) {
+  if (!isoDate) return 0;
+  const then = new Date(isoDate + 'T00:00:00');
+  const now = new Date(fmtDate(new Date()) + 'T00:00:00');
+  return Math.round((now - then) / 86400000);
+}
+function isStale(t) {
+  return !t.done && !!t.createdAt && daysSince(t.createdAt) >= STALE_DAYS;
 }
 
 function eventsForDate(dateStr) {
@@ -2247,6 +2448,7 @@ function renderCalendarMain() {
       <input type="date" class="date-input" id="mtg-date" value="${fmtDate(new Date(calYear, calMonth, Math.min(new Date().getDate(), daysInMonth)))}">
       <input type="time" class="date-input" id="mtg-time">
       <button class="btn btn-primary" onclick="addMeeting()">Add</button>
+      <button class="btn" onclick="openMeetingsBulkAddModal()">＋ Bulk add</button>
     </div>
 
     <div class="section-divider">
@@ -2313,6 +2515,89 @@ function addMeeting() {
 function deleteMeeting(id) {
   state.meetings = (state.meetings || []).filter(m => m.id !== id);
   saveState();
+  renderCalendarMain();
+}
+
+function openMeetingsBulkAddModal() {
+  const html = `
+    <div class="modal-overlay" onclick="if(event.target===this) closeModal()">
+      <div class="modal-panel" style="max-width:540px">
+        <div class="modal-header">
+          <div class="modal-title">Bulk add — 🗓️ Meetings</div>
+          <button class="delete-btn" style="opacity:1" onclick="closeModal()">✕</button>
+        </div>
+        <div style="padding:14px 18px 18px;display:flex;flex-direction:column;gap:18px">
+
+          <div>
+            <div style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:4px">Paste multiple rows</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:6px">One entry per line: Title, Date, Time (tab or comma separated). Time is optional.</div>
+            <textarea id="bulk-mtg-text" rows="6" style="width:100%;box-sizing:border-box;font-family:inherit;font-size:12px;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text)" placeholder="Board update call, 2026-07-30, 14:00"></textarea>
+            <div style="display:flex;justify-content:flex-end;margin-top:8px">
+              <button class="btn btn-primary" onclick="bulkAddMeetingsFromPaste()">＋ Add pasted rows</button>
+            </div>
+          </div>
+
+          <div style="border-top:1px solid var(--border);padding-top:14px">
+            <div style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:4px">Generate a repeating series</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:6px">A recurring meeting — e.g. a weekly standup.</div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px">
+              <input class="add-input" id="bulk-mtg-rep-title" placeholder="Title…" style="flex:2;min-width:160px">
+              <input type="date" class="date-input" id="bulk-mtg-rep-start" title="First date">
+              <input type="time" class="date-input" id="bulk-mtg-rep-time" title="Time (optional)">
+              <select class="add-priority-select" id="bulk-mtg-rep-every" title="Repeat interval">
+                <option value="1">Every day</option>
+                <option value="7" selected>Every week</option>
+                <option value="14">Every 2 weeks</option>
+                <option value="30">Every month</option>
+              </select>
+              <input class="add-input" id="bulk-mtg-rep-count" type="number" min="1" max="52" value="4" style="flex:0 0 64px" title="How many occurrences">
+              <button class="btn btn-primary" onclick="bulkAddMeetingsRepeating()">＋ Generate</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modal-root').innerHTML = html;
+}
+
+function bulkAddMeetingsFromPaste() {
+  const ta = document.getElementById('bulk-mtg-text');
+  const lines = ta.value.split('\n').map(l => l.trim()).filter(Boolean);
+  if (!lines.length) return;
+  if (!state.meetings) state.meetings = [];
+  let added = 0;
+  lines.forEach(line => {
+    const parts = line.includes('\t') ? line.split('\t') : line.split(',');
+    const title = (parts[0] || '').trim();
+    const date = parts[1] !== undefined ? parseFlexibleDate(parts[1]) : '';
+    if (!title || !date) return;
+    const time = (parts[2] || '').trim();
+    state.meetings.push({ id: 'mtg_' + Date.now() + '_' + added, title, date, time });
+    added++;
+  });
+  if (!added) return;
+  saveState();
+  closeModal();
+  renderCalendarMain();
+}
+
+function bulkAddMeetingsRepeating() {
+  const title = document.getElementById('bulk-mtg-rep-title').value.trim();
+  const startVal = document.getElementById('bulk-mtg-rep-start').value;
+  if (!title || !startVal) return;
+  const time = document.getElementById('bulk-mtg-rep-time').value;
+  const everyDays = parseInt(document.getElementById('bulk-mtg-rep-every').value, 10) || 7;
+  const count = Math.max(1, Math.min(52, parseInt(document.getElementById('bulk-mtg-rep-count').value, 10) || 1));
+  const start = new Date(startVal + 'T00:00:00');
+  if (!state.meetings) state.meetings = [];
+  for (let i = 0; i < count; i++) {
+    const d = new Date(start);
+    d.setDate(d.getDate() + everyDays * i);
+    state.meetings.push({ id: 'mtg_' + Date.now() + '_' + i, title, date: fmtDate(d), time });
+  }
+  saveState();
+  closeModal();
   renderCalendarMain();
 }
 
@@ -2855,6 +3140,7 @@ function renderLinksMain() {
           <option value="" ${!linksFilterCat ? 'selected' : ''}>All categories</option>
           ${LINK_CATS.map(c => `<option value="${c}" ${linksFilterCat === c ? 'selected' : ''}>${linkCatLabel(c)}</option>`).join('')}
         </select>
+        <button class="btn" onclick="openLinksBulkAddModal()">＋ Bulk add</button>
       </div>
     </div>
     <div class="add-task-area" style="cursor:default">
@@ -2921,6 +3207,48 @@ function addLink() {
   if (!state.docLinks) state.docLinks = [];
   state.docLinks.push({ id:'link_' + Date.now(), label, url, cat });
   saveState();
+  renderLinksMain();
+}
+
+function openLinksBulkAddModal() {
+  const html = `
+    <div class="modal-overlay" onclick="if(event.target===this) closeModal()">
+      <div class="modal-panel" style="max-width:520px">
+        <div class="modal-header">
+          <div class="modal-title">Bulk add — 🔗 Document links</div>
+          <button class="delete-btn" style="opacity:1" onclick="closeModal()">✕</button>
+        </div>
+        <div style="padding:14px 18px 18px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:6px">One entry per line: Label, URL, Category (tab or comma separated). Category is optional and defaults to Other — valid ones are ${LINK_CATS.join(', ')}.</div>
+          <textarea id="bulk-links-text" rows="6" style="width:100%;box-sizing:border-box;font-family:inherit;font-size:12px;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text)" placeholder="July P&amp;L — Branch 3, https://docs.google.com/…, Sheets"></textarea>
+          <div style="display:flex;justify-content:flex-end;margin-top:10px">
+            <button class="btn btn-primary" onclick="bulkAddLinksFromPaste()">＋ Add pasted rows</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modal-root').innerHTML = html;
+}
+
+function bulkAddLinksFromPaste() {
+  const ta = document.getElementById('bulk-links-text');
+  const lines = ta.value.split('\n').map(l => l.trim()).filter(Boolean);
+  if (!lines.length) return;
+  if (!state.docLinks) state.docLinks = [];
+  let added = 0;
+  lines.forEach(line => {
+    const parts = line.includes('\t') ? line.split('\t') : line.split(',');
+    const label = (parts[0] || '').trim();
+    const url = (parts[1] || '').trim();
+    if (!label || !url) return;
+    let cat = (parts[2] || '').trim();
+    if (!LINK_CATS.includes(cat)) cat = 'Other';
+    state.docLinks.push({ id: 'link_' + Date.now() + '_' + added, label, url, cat });
+    added++;
+  });
+  if (!added) return;
+  saveState();
+  closeModal();
   renderLinksMain();
 }
 
@@ -3036,6 +3364,7 @@ function duplicateTask(id) {
       status: 'not-started',
       date: '',
       completedAt: null,
+      createdAt: fmtDate(new Date()),
     };
     list.splice(idx + 1, 0, copy);
     saveState(); renderAll();
@@ -3093,7 +3422,7 @@ function addTask(deskId) {
   const title = input.value.trim();
   if (!title) { input.focus(); return; }
   const costVal = costInput ? parseFloat(costInput.value) : NaN;
-  const newTask = {
+  const newTask = normalizeTask({
     id: deskId + '_' + Date.now(),
     title,
     meta: '',
@@ -3105,7 +3434,7 @@ function addTask(deskId) {
     link: linkInput ? linkInput.value.trim() : '',
     kind: kindSel ? kindSel.value : 'task',
     cost: isNaN(costVal) ? null : costVal,
-  };
+  });
   if (!state.desks[deskId]) state.desks[deskId] = [];
   state.desks[deskId].unshift(newTask);
   saveState();
@@ -3349,6 +3678,7 @@ async function connectSync(pin, silent) {
       if (!data.state.docLinks) data.state.docLinks = [];
       if (!data.state.notes) data.state.notes = [];
       if (!data.state.morningCheck) data.state.morningCheck = { date: '', desks: [] };
+      if (!data.state.checklistStreak) data.state.checklistStreak = { count: 0, lastDate: '' };
       state = data.state;
       localStorage.setItem(STORE_KEY, JSON.stringify(state));
       renderAll();
@@ -3422,6 +3752,7 @@ function importBackup(ev) {
         if (!incoming.docLinks) incoming.docLinks = [];
         if (!incoming.notes) incoming.notes = [];
         if (!incoming.morningCheck) incoming.morningCheck = { date: '', desks: [] };
+        if (!incoming.checklistStreak) incoming.checklistStreak = { count: 0, lastDate: '' };
         DESKS.forEach(d => {
           if (!incoming.desks[d.id]) incoming.desks[d.id] = [];
           incoming.desks[d.id].forEach(normalizeTask);
@@ -3473,6 +3804,7 @@ function hideLockOverlay() {
 const NOTIF_KEY = 'qualitech_notif_enabled';
 const NOTIF_DIGEST_KEY = 'qualitech_notif_last_digest';
 const NOTIF_SEEN_OVERDUE_KEY = 'qualitech_notif_seen_overdue';
+const NOTIF_SEEN_MEETING_KEY = 'qualitech_notif_seen_meeting';
 const PUSH_VAPID_PUBLIC_KEY = 'BLEeUe5RcmhUP7EYhO1mvAZCUR78ZC7ZXzYcWEBHFebm63TgKRVj9mpE9d_LfLUQmMNtwUsIVOR0LExdw8AmMJ8';
 
 function urlBase64ToUint8Array(base64String) {
@@ -3553,6 +3885,7 @@ function toggleNotifications() {
       localStorage.removeItem(NOTIF_DIGEST_KEY);
       maybeSendDailyDigest();
       checkOverdueNudges();
+      checkMeetingReminders();
       subscribeForPush();
     } else {
       showAlertModal('Notifications were blocked. Allow them for this site in your browser settings, then try again.');
@@ -3608,6 +3941,29 @@ function checkOverdueNudges() {
     if (!seen.has(t.id)) sendNotification(`Overdue · ${d.name}`, t.title, 'overdue-' + t.id);
   });
   localStorage.setItem(NOTIF_SEEN_OVERDUE_KEY, JSON.stringify([...stillOverdue]));
+}
+
+// Nudges once per meeting when it's starting within 15 minutes (and not
+// more than 5 minutes past start, in case a check gets missed) — same
+// once-per-check-cycle "seen" pattern as overdue nudges above.
+function checkMeetingReminders() {
+  if (!notifActive()) return;
+  let seen;
+  try { seen = new Set(JSON.parse(localStorage.getItem(NOTIF_SEEN_MEETING_KEY) || '[]')); }
+  catch (e) { seen = new Set(); }
+  const now = new Date();
+  const todayStr = fmtDate(now);
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const stillPending = new Set();
+  (state.meetings || []).forEach(m => {
+    if (m.date !== todayStr || !m.time) return;
+    const [h, min] = m.time.split(':').map(Number);
+    const diff = (h * 60 + min) - nowMinutes;
+    if (diff > 15 || diff < -5) return;
+    stillPending.add(m.id);
+    if (!seen.has(m.id)) sendNotification('Meeting soon', `${m.title}${m.time ? ' · ' + m.time : ''}`, 'meeting-' + m.id);
+  });
+  localStorage.setItem(NOTIF_SEEN_MEETING_KEY, JSON.stringify([...stillPending]));
 }
 
 function renderLockScreen(mode, opts) {
@@ -3750,16 +4106,19 @@ if (dashboardPin) connectSync(dashboardPin, true);
 document.addEventListener('selectionchange', () => { if (activeView === 'notes') updateNotesToolbarState(); });
 maybeSendDailyDigest();
 checkOverdueNudges();
+checkMeetingReminders();
 
 // Keep "today" current if the dashboard is left open across midnight (or
 // just idle) — otherwise a task due "today" wouldn't flip to Overdue, and
 // the top KPI strip, without some other action triggering a re-render.
 // Same interval also re-checks desktop-notification triggers (daily digest,
-// newly-overdue nudges) since both depend on "today" being current.
+// newly-overdue nudges, meeting reminders) since all three depend on "today"
+// (and meetings also "now") being current.
 setInterval(() => {
   setDate(); computeKpis(); renderNav();
   maybeSendDailyDigest();
   checkOverdueNudges();
+  checkMeetingReminders();
 }, 5 * 60 * 1000);
 
 if ('serviceWorker' in navigator) {
