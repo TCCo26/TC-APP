@@ -2880,7 +2880,10 @@ function renderLinksMain() {
               <div class="task-title-row">
                 <span class="task-title-input" contenteditable="true" style="display:block" onblur="editLink('${l.id}','label',this)">${escHtml(l.label)}</span>
               </div>
-              <a href="${escHtml(l.url)}" target="_blank" rel="noopener" style="font-size:11px;color:var(--navy-light);word-break:break-all">${escHtml(l.url)}</a>
+              <div style="display:flex;align-items:center;gap:6px;margin-top:2px">
+                <input type="url" class="task-link-input" style="flex:1;font-size:11px" value="${escHtml(l.url)}" onchange="editLinkUrl('${l.id}', this.value)">
+                <a class="notes-toggle task-link-icon" href="${escHtml(l.url)}" target="_blank" rel="noopener" title="Open link">↗</a>
+              </div>
             </div>
             <div class="task-controls">
               <span class="priority-btn p4">${escHtml(l.cat || 'Other')}</span>
@@ -2909,6 +2912,11 @@ function addLink() {
 function editLink(id, field, el) {
   const l = (state.docLinks || []).find(l => l.id === id);
   if (l) { l[field] = el.innerText.trim(); saveState(); }
+}
+
+function editLinkUrl(id, val) {
+  const l = (state.docLinks || []).find(l => l.id === id);
+  if (l) { l.url = val.trim(); saveState(); renderLinksMain(); }
 }
 
 function deleteLink(id) {
