@@ -1097,6 +1097,13 @@ body {
 .cal-chip.task.done { text-decoration: line-through; opacity: 0.6; cursor: default; }
 .chip-del { cursor: pointer; opacity: 0.6; flex-shrink: 0; }
 .chip-del:hover { opacity: 1; }
+#cal-chip-tooltip {
+  display: none; position: fixed; z-index: 2000; max-width: 240px;
+  background: var(--navy); color: #fff; font-size: 11px; line-height: 1.5;
+  padding: 8px 10px; border-radius: 8px; box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+  pointer-events: none;
+}
+#cal-chip-tooltip strong { display: block; font-size: 12px; margin-bottom: 2px; }
 .unscheduled-tray {
   display: flex; flex-wrap: wrap; gap: 6px; padding: 10px;
   background: var(--surface); border: 1px dashed var(--border-strong);
@@ -2388,7 +2395,7 @@ function isStale(t) {
 function eventsForDate(dateStr) {
   const evs = [];
   allTasksFlat().forEach(({t, d}) => {
-    if (t.date === dateStr) evs.push({ type:'task', id:t.id, title:t.title, deskIcon:d.icon, deskBg:d.ic_bg, deskColor:d.ic_color, priority:effectivePriority(t), done:t.done, kind:t.kind, cost:t.cost });
+    if (t.date === dateStr) evs.push({ type:'task', id:t.id, title:t.title, deskId:d.id, deskName:d.name, deskIcon:d.icon, deskBg:d.ic_bg, deskColor:d.ic_color, priority:effectivePriority(t), done:t.done, kind:t.kind, cost:t.cost });
   });
   (state.meetings || []).forEach(m => {
     if (m.date === dateStr) evs.push({ type:'meeting', id:m.id, title:m.title, time:m.time });
@@ -2398,6 +2405,53 @@ function eventsForDate(dateStr) {
 
 function deskChipStyle(bg, color) {
   return `background:${bg};color:${color};border-color:${color}`;
+}
+
+function taskTooltipText(title, deskName, kind, cost, priority, done) {
+  const lines = [title, deskName];
+  lines.push(kind === 'payment' ? `Payment${cost ? ' · ' + fmtCost(cost) : ''}` : 'Task');
+  lines.push(done ? 'Done' : PRIORITY_LABELS[priority]);
+  return lines.join('\n');
+}
+function meetingTooltipText(title, time, dateStr) {
+  const lines = [title, 'Meeting'];
+  if (time) lines.push(time);
+  lines.push(dateStr);
+  return lines.join('\n');
+}
+
+function showCalTooltip(ev) {
+  const text = ev.currentTarget.dataset.tt;
+  if (!text) return;
+  let tip = document.getElementById('cal-chip-tooltip');
+  if (!tip) {
+    tip = document.createElement('div');
+    tip.id = 'cal-chip-tooltip';
+    document.body.appendChild(tip);
+  }
+  const lines = text.split('\n');
+  tip.innerHTML = '';
+  const strong = document.createElement('strong');
+  strong.textContent = lines[0];
+  tip.appendChild(strong);
+  lines.slice(1).forEach(l => {
+    const div = document.createElement('div');
+    div.textContent = l;
+    tip.appendChild(div);
+  });
+  tip.style.display = 'block';
+  const rect = ev.currentTarget.getBoundingClientRect();
+  const tipRect = tip.getBoundingClientRect();
+  let left = rect.left;
+  let top = rect.bottom + 6;
+  if (left + tipRect.width > window.innerWidth - 8) left = Math.max(8, window.innerWidth - tipRect.width - 8);
+  if (top + tipRect.height > window.innerHeight - 8) top = rect.top - tipRect.height - 6;
+  tip.style.left = left + 'px';
+  tip.style.top = top + 'px';
+}
+function hideCalTooltip() {
+  const tip = document.getElementById('cal-chip-tooltip');
+  if (tip) tip.style.display = 'none';
 }
 
 function renderCalendarMain() {
@@ -2417,8 +2471,8 @@ function renderCalendarMain() {
         <div class="cal-daynum">${day}</div>
         <div class="cal-chips">
           ${evs.map(e => e.type==='task'
-            ? `<div class="cal-chip task ${e.done ? 'done' : ''}" style="${deskChipStyle(e.deskBg, e.deskColor)}" ${e.done ? '' : `draggable="true" ondragstart="dragStart(event,'task','${e.id}')"`} title="${escHtml(e.title)}"><span>${e.deskIcon} ${e.kind === 'payment' && e.cost ? fmtCost(e.cost) + ' · ' : ''}${escHtml(e.title)}</span></div>`
-            : `<div class="cal-chip meeting" draggable="true" ondragstart="dragStart(event,'meeting','${e.id}')" title="${escHtml(e.title)}"><span>🕐 ${e.time ? e.time + ' · ' : ''}${escHtml(e.title)}</span><span class="chip-del" onclick="event.stopPropagation();deleteMeeting('${e.id}')">✕</span></div>`
+            ? `<div class="cal-chip task ${e.done ? 'done' : ''}" style="${deskChipStyle(e.deskBg, e.deskColor)}" ${e.done ? '' : `draggable="true" ondragstart="dragStart(event,'task','${e.id}')"`} onclick="switchView('${e.deskId}')" onmouseenter="showCalTooltip(event)" onmouseleave="hideCalTooltip()" data-tt="${escHtml(taskTooltipText(e.title, e.deskName, e.kind, e.cost, e.priority, e.done))}"><span>${e.deskIcon} ${e.kind === 'payment' && e.cost ? fmtCost(e.cost) + ' · ' : ''}${escHtml(e.title)}</span></div>`
+            : `<div class="cal-chip meeting" draggable="true" ondragstart="dragStart(event,'meeting','${e.id}')" onmouseenter="showCalTooltip(event)" onmouseleave="hideCalTooltip()" data-tt="${escHtml(meetingTooltipText(e.title, e.time, dateStr))}"><span>🕐 ${e.time ? e.time + ' · ' : ''}${escHtml(e.title)}</span><span class="chip-del" onclick="event.stopPropagation();deleteMeeting('${e.id}')">✕</span></div>`
           ).join('')}
         </div>
       </div>`;
@@ -2458,7 +2512,7 @@ function renderCalendarMain() {
     <div class="unscheduled-tray">
       ${unscheduled.length === 0
         ? `<span style="font-size:12px;color:var(--muted)">Everything's scheduled.</span>`
-        : unscheduled.map(({t,d}) => `<div class="cal-chip task" style="${deskChipStyle(d.ic_bg, d.ic_color)}" draggable="true" ondragstart="dragStart(event,'task','${t.id}')" title="${escHtml(t.title)}"><span>${d.icon} ${t.kind === 'payment' && t.cost ? fmtCost(t.cost) + ' · ' : ''}${escHtml(t.title)}</span></div>`).join('')}
+        : unscheduled.map(({t,d}) => `<div class="cal-chip task" style="${deskChipStyle(d.ic_bg, d.ic_color)}" draggable="true" ondragstart="dragStart(event,'task','${t.id}')" onclick="switchView('${d.id}')" onmouseenter="showCalTooltip(event)" onmouseleave="hideCalTooltip()" data-tt="${escHtml(taskTooltipText(t.title, d.name, t.kind, t.cost, effectivePriority(t), t.done))}"><span>${d.icon} ${t.kind === 'payment' && t.cost ? fmtCost(t.cost) + ' · ' : ''}${escHtml(t.title)}</span></div>`).join('')}
     </div>
 
     <div class="cal-scroll">
