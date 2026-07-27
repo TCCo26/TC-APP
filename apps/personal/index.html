@@ -1527,7 +1527,7 @@ const DEFAULT = {
   expenses: [],
   expenseBudget: { deposits: [] },
   priorityExpenses: [],
-  watchlist: { movies: [], tv: [], music: [] },
+  watchlist: { movies: [], tv: [], music: [], games: [] },
   readingList: [],
   calendarFeedUrl: "",
   calendarCache: { fetchedAt: null, events: [] },
@@ -2510,7 +2510,7 @@ function buildContentResults(q) {
       results.push({ label: escHtml(b.title), hint: "Reading", icon: "ti-books", action: () => setPage("reading") });
     }
   });
-  ["movies", "tv", "music"].forEach(cat => {
+  WATCHLIST_CATS.map(c => c.key).forEach(cat => {
     ((STATE.watchlist || {})[cat] || []).forEach(item => {
       if ((item.title || "").toLowerCase().includes(q)) {
         results.push({ label: escHtml(item.title), hint: "Watchlist · " + cat, icon: "ti-device-tv", action: () => setPage("watchlist") });
@@ -3949,8 +3949,8 @@ function renderCategoryWidgets() {
   let pfValue = 0;
   (STATE.portfolio || []).forEach(p => { pfValue += (p.shares * p.price) || 0; });
 
-  const watchDone = ["movies", "tv", "music"].reduce((s, k) => s + (STATE.watchlist[k] || []).filter(x => x.done).length, 0);
-  const watchTotal = ["movies", "tv", "music"].reduce((s, k) => s + (STATE.watchlist[k] || []).length, 0);
+  const watchDone = WATCHLIST_CATS.map(c => c.key).reduce((s, k) => s + (STATE.watchlist[k] || []).filter(x => x.done).length, 0);
+  const watchTotal = WATCHLIST_CATS.map(c => c.key).reduce((s, k) => s + (STATE.watchlist[k] || []).length, 0);
 
   const readDone = (STATE.readingList || []).filter(r => r.done).length;
   const shopDone = (STATE.shoppingList || []).filter(s => s.done).length;
@@ -4035,13 +4035,13 @@ const QUICK_ADD_CONFIG = {
   watchlist: {
     title: "Add to watchlist",
     body: () => `<div class="add-row" style="margin-top:0">
-      <select id="qa-f2"><option value="movies">Movie</option><option value="tv">TV show</option><option value="music">Music / album</option></select>
+      <select id="qa-f2"><option value="movies">Movie</option><option value="tv">TV show</option><option value="music">Music / album</option><option value="games">Video game</option></select>
     </div><div class="add-row"><input id="qa-f1" type="text" placeholder="Title…"></div>`,
     submit: () => {
       const title = document.getElementById('qa-f1').value.trim();
       if (!title) return false;
       const cat = document.getElementById('qa-f2').value;
-      if (!STATE.watchlist) STATE.watchlist = { movies: [], tv: [], music: [] };
+      if (!STATE.watchlist) STATE.watchlist = { movies: [], tv: [], music: [], games: [] };
       STATE.watchlist[cat].push({ title, done: false });
       saveState(); renderWatchlist();
       return true;
@@ -4101,14 +4101,14 @@ const QUICK_ADD_CONFIG = {
   bulkWatchlist: {
     title: "Bulk add — watchlist",
     body: () => `
-      <div class="add-row" style="margin-top:0"><select id="qa-f2"><option value="movies">Movies</option><option value="tv">TV shows</option><option value="music">Music / albums</option></select></div>
-      <div class="f11 tc" style="margin:6px 0">One per line: Title, Person (director/artist — optional).</div>
+      <div class="add-row" style="margin-top:0"><select id="qa-f2"><option value="movies">Movies</option><option value="tv">TV shows</option><option value="music">Music / albums</option><option value="games">Video games</option></select></div>
+      <div class="f11 tc" style="margin:6px 0">One per line: Title, Person (director/artist/studio — optional).</div>
       <textarea id="qa-f1" placeholder="Inception, Christopher Nolan"></textarea>`,
     submit: () => {
       const cat = document.getElementById('qa-f2').value;
       const lines = document.getElementById('qa-f1').value.split('\n').map(l => l.trim()).filter(Boolean);
       if (!lines.length) return false;
-      if (!STATE.watchlist) STATE.watchlist = { movies: [], tv: [], music: [] };
+      if (!STATE.watchlist) STATE.watchlist = { movies: [], tv: [], music: [], games: [] };
       if (!STATE.watchlist[cat]) STATE.watchlist[cat] = [];
       lines.forEach(line => {
         const parts = line.includes('\t') ? line.split('\t') : line.split(',');
@@ -4718,9 +4718,10 @@ async function detectWatchlistGenres() {
 }
 
 const WATCHLIST_CATS = [
-  {key:"movies", label:"Movies", ph:"Add a movie…", personPh:"Director", searchType:"movies", personSearch:"person", doneLabel:"Watched"},
-  {key:"tv", label:"TV shows", ph:"Add a show…", personPh:"Creator", searchType:"tv", personSearch:"person", doneLabel:"Watched"},
-  {key:"music", label:"Music / albums", ph:"Add an album…", personPh:"Artist", searchType:"music", personSearch:null, doneLabel:"Listened"},
+  {key:"movies", label:"Movies", ph:"Add a movie…", personPh:"Director", searchType:"movies", personSearch:"person", doneLabel:"Watched", icon:"ti-device-tv"},
+  {key:"tv", label:"TV shows", ph:"Add a show…", personPh:"Creator", searchType:"tv", personSearch:"person", doneLabel:"Watched", icon:"ti-device-tv"},
+  {key:"music", label:"Music / albums", ph:"Add an album…", personPh:"Artist", searchType:"music", personSearch:null, doneLabel:"Listened", icon:"ti-device-tv"},
+  {key:"games", label:"Video games", ph:"Add a game…", personPh:"Studio", searchType:"game", personSearch:null, doneLabel:"Played", icon:"ti-device-gamepad-2"},
 ];
 const GENRE_PALETTE = ["var(--genre-1)", "var(--genre-2)", "var(--genre-3)", "var(--genre-4)", "var(--genre-5)", "var(--genre-6)"];
 const WATCHLIST_PENDING_GENRE = {};
@@ -4825,7 +4826,7 @@ function watchlistRowHTML(cat, c, it, i) {
 }
 
 function renderWatchlist() {
-  if (!STATE.watchlist) STATE.watchlist = { movies: [], tv: [], music: [] };
+  if (!STATE.watchlist) STATE.watchlist = { movies: [], tv: [], music: [], games: [] };
   const cats = WATCHLIST_CATS;
   document.getElementById("watchlist-sections").innerHTML = cats.map(c => {
     const items = STATE.watchlist[c.key] || [];
@@ -4834,7 +4835,7 @@ function renderWatchlist() {
     <div class="sl list-group-label" onclick="toggleListGroup('${c.key}')"><i class="ti ti-chevron-down list-group-chev"></i>${c.label} — ${items.filter(x => x.done).length}/${items.length} done</div>
     <div class="list-group-body">
     <div class="add-row" style="margin-top:0"><input id="${c.key}-search-inp" type="text" placeholder="Search ${c.label.toLowerCase()}…"></div>
-    <div id="${c.key}-items-list">${items.length ? items.map((it, i) => watchlistRowHTML(c.key, c, it, i)).join("") : emptyStateHTML("ti-device-tv", emptyAll)}</div>
+    <div id="${c.key}-items-list">${items.length ? items.map((it, i) => watchlistRowHTML(c.key, c, it, i)).join("") : emptyStateHTML(c.icon || "ti-device-tv", emptyAll)}</div>
     <div class="add-row">
       <div class="ac-wrap"><input id="${c.key}-inp" type="text" placeholder="${c.ph}" autocomplete="off"><div class="ac-dropdown" id="${c.key}-inp-ac"></div></div>
       <div class="ac-wrap" style="max-width:150px"><input id="${c.key}-person-inp" type="text" placeholder="${c.personPh}" autocomplete="off"><div class="ac-dropdown" id="${c.key}-person-inp-ac"></div></div>
