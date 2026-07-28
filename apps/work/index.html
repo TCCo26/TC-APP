@@ -1344,6 +1344,7 @@ body {
         <button class="btn" id="sync-action-btn" style="font-size:11px;padding:4px 8px" onclick="openSyncModal()">Connect</button>
       </div>
       <div id="notif-status-row" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding-top:8px;border-top:1px solid var(--border)"></div>
+      <div id="vacation-status-row" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding-top:8px;border-top:1px solid var(--border)"></div>
       <div id="lock-status-row" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;padding-top:8px;border-top:1px solid var(--border)"></div>
       Auto-saved to this browser.<br>
       Data stays on your device.
@@ -1532,12 +1533,22 @@ let notesFilterDesk = null;        // null = all desks
 let notesSearchQuery = '';
 let doneSectionExpanded = false;
 
+// Vacation mode: a date range during which due-date escalation, streak
+// requirements, and push nudges all pause. Nothing about the underlying
+// data changes — it's purely "don't make today's date apply pressure" for
+// as long as state.vacation covers it.
+function isVacationActive(dateStr) {
+  dateStr = dateStr || fmtDate(new Date());
+  return !!(state.vacation && state.vacation.start && state.vacation.end && dateStr >= state.vacation.start && dateStr <= state.vacation.end);
+}
+
 // The due date always wins over whatever priority was manually set: an open
 // task past its due date is Overdue (p1); an open task due today is Urgent
 // (p2). This doesn't touch the stored t.priority, so it reverts
 // automatically if the date is pushed forward or cleared.
 function effectivePriority(t) {
   if (t.done || !t.date) return t.priority;
+  if (isVacationActive()) return t.priority;
   const today = fmtDate(new Date());
   if (t.date < today) return 'p1';
   if (t.date === today) return 'p2';
@@ -1998,6 +2009,15 @@ function toggleMorningCheck(deskId) {
   renderOverviewMain();
 }
 
+// Walks backward from a date to the most recent day that wasn't inside a
+// vacation window — lets the streak treat "away" days like they didn't
+// happen instead of counting them as missed.
+function previousActiveDay(dateStr) {
+  let d = new Date(dateStr + 'T00:00:00');
+  do { d = new Date(d.getTime() - 86400000); } while (isVacationActive(fmtDate(d)));
+  return fmtDate(d);
+}
+
 // Advances the streak the first time all desks get reviewed on a given day;
 // doesn't reverse it if a desk gets unchecked again afterward — this is a
 // light habit-tracking nudge, not an audit trail.
@@ -2006,7 +2026,7 @@ function updateChecklistStreak() {
   if (!DESKS.every(d => state.morningCheck.desks.includes(d.id))) return;
   if (!state.checklistStreak) state.checklistStreak = { count: 0, lastDate: '' };
   if (state.checklistStreak.lastDate === today) return;
-  const yesterday = fmtDate(new Date(Date.now() - 86400000));
+  const yesterday = previousActiveDay(today);
   state.checklistStreak.count = state.checklistStreak.lastDate === yesterday ? state.checklistStreak.count + 1 : 1;
   state.checklistStreak.lastDate = today;
 }
@@ -2138,6 +2158,15 @@ function renderOverviewMain() {
         <button class="btn" onclick="openDailyBriefModal()">📋 Copy today's brief</button>
       </div>
     </div>`;
+
+  if (isVacationActive()) {
+    html += `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:16px;display:flex;align-items:center;gap:10px">
+        <span style="font-size:18px">🌴</span>
+        <div style="font-size:12px;color:var(--text-2)">On vacation through ${fmtShortDate(state.vacation.end)} — overdue alerts, the checklist streak, and notifications are paused.</div>
+        <button class="btn" style="margin-left:auto;font-size:11px;padding:4px 8px" onclick="clearVacation()">End now</button>
+      </div>`;
+  }
 
   html += renderMorningChecklist();
 
@@ -3736,6 +3765,7 @@ async function connectSync(pin, silent) {
       state = data.state;
       localStorage.setItem(STORE_KEY, JSON.stringify(state));
       renderAll();
+      updateVacationStatusUI();
     } else {
       // Nothing saved on the server yet — push what's here now as the seed.
       await pushStateToCloud();
@@ -3962,7 +3992,7 @@ function updateNotifStatusUI() {
 // One digest per calendar day, only sent if there's actually something to
 // flag — nothing to report shouldn't be worth a notification.
 function maybeSendDailyDigest() {
-  if (!notifActive()) return;
+  if (!notifActive() || isVacationActive()) return;
   const today = fmtDate(new Date());
   if (localStorage.getItem(NOTIF_DIGEST_KEY) === today) return;
   let overdue = 0, dueToday = 0;
@@ -3984,7 +4014,7 @@ function maybeSendDailyDigest() {
 // tasks drop out of the "seen" set as soon as they're no longer overdue
 // (done, or the date moves), so a task can re-nudge if it slips again later.
 function checkOverdueNudges() {
-  if (!notifActive()) return;
+  if (!notifActive() || isVacationActive()) return;
   let seen;
   try { seen = new Set(JSON.parse(localStorage.getItem(NOTIF_SEEN_OVERDUE_KEY) || '[]')); }
   catch (e) { seen = new Set(); }
@@ -4001,7 +4031,7 @@ function checkOverdueNudges() {
 // more than 5 minutes past start, in case a check gets missed) — same
 // once-per-check-cycle "seen" pattern as overdue nudges above.
 function checkMeetingReminders() {
-  if (!notifActive()) return;
+  if (!notifActive() || isVacationActive()) return;
   let seen;
   try { seen = new Set(JSON.parse(localStorage.getItem(NOTIF_SEEN_MEETING_KEY) || '[]')); }
   catch (e) { seen = new Set(); }
@@ -4018,6 +4048,75 @@ function checkMeetingReminders() {
     if (!seen.has(m.id)) sendNotification('Meeting soon', `${m.title}${m.time ? ' · ' + m.time : ''}`, 'meeting-' + m.id);
   });
   localStorage.setItem(NOTIF_SEEN_MEETING_KEY, JSON.stringify([...stillPending]));
+}
+
+function fmtShortDate(dateStr) {
+  if (!dateStr) return '';
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return `${MONTH_NAMES[m - 1].slice(0, 3)} ${d}`;
+}
+
+function updateVacationStatusUI() {
+  const row = document.getElementById('vacation-status-row');
+  if (!row) return;
+  const v = state.vacation;
+  if (v && v.start && v.end) {
+    row.innerHTML = `
+      <span style="font-size:11px;color:var(--muted)">🌴 Vacation: ${fmtShortDate(v.start)}–${fmtShortDate(v.end)}${isVacationActive() ? ' (active)' : ''}</span>
+      <span style="display:flex;gap:4px">
+        <button class="btn" style="font-size:11px;padding:4px 8px" onclick="openVacationModal()">Edit</button>
+        <button class="btn" style="font-size:11px;padding:4px 8px" onclick="clearVacation()">Clear</button>
+      </span>`;
+  } else {
+    row.innerHTML = `
+      <span style="font-size:11px;color:var(--muted)">🌴 Vacation mode: off</span>
+      <button class="btn" style="font-size:11px;padding:4px 8px" onclick="openVacationModal()">Set dates</button>`;
+  }
+}
+
+// While active: overdue/due-today escalation freezes at each task's
+// manually-set priority, the morning-checklist streak treats the days as
+// skipped rather than missed, and daily digests / overdue nudges / meeting
+// reminders all stop sending — see effectivePriority, updateChecklistStreak,
+// and the notifActive() call sites above.
+function openVacationModal() {
+  const v = state.vacation || {};
+  const html = `
+    <div class="modal-overlay" onclick="if(event.target===this) closeModal()">
+      <div class="modal-panel" style="max-width:340px">
+        <div class="modal-header">
+          <div class="modal-title">🌴 Vacation mode</div>
+          <button class="delete-btn" style="opacity:1" onclick="closeModal()">✕</button>
+        </div>
+        <div style="padding:16px 18px">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:10px">While you're away, overdue/due-today alerts, the morning-checklist streak, and push notifications all pause.</div>
+          <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">From</label>
+          <input type="date" id="vacation-start-input" class="date-input" style="width:100%;margin-bottom:10px" value="${v.start || fmtDate(new Date())}">
+          <label style="font-size:11px;color:var(--muted);display:block;margin-bottom:3px">Through</label>
+          <input type="date" id="vacation-end-input" class="date-input" style="width:100%;margin-bottom:14px" value="${v.end || fmtDate(new Date())}">
+          <button class="btn btn-primary" style="width:100%" onclick="saveVacationDates()">Save</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modal-root').innerHTML = html;
+}
+
+function saveVacationDates() {
+  const start = document.getElementById('vacation-start-input').value;
+  const end = document.getElementById('vacation-end-input').value;
+  if (!start || !end || end < start) { showAlertModal('Pick a valid date range.'); return; }
+  state.vacation = { start, end };
+  saveState();
+  closeModal();
+  updateVacationStatusUI();
+  renderAll();
+}
+
+function clearVacation() {
+  state.vacation = null;
+  saveState();
+  updateVacationStatusUI();
+  renderAll();
 }
 
 function renderLockScreen(mode, opts) {
@@ -4155,6 +4254,7 @@ setDate();
 renderAll();
 updateLockStatusUI();
 updateNotifStatusUI();
+updateVacationStatusUI();
 initLock();
 if (dashboardPin) connectSync(dashboardPin, true);
 document.addEventListener('selectionchange', () => { if (activeView === 'notes') updateNotesToolbarState(); });
