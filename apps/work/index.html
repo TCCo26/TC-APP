@@ -1463,6 +1463,11 @@ function normalizeTask(t) {
   if (t.completedAt === undefined) t.completedAt = t.done ? '' : null;
   if (t.kind === undefined) t.kind = 'task';
   if (t.cost === undefined) t.cost = null;
+  // Only meaningful on the Repayment Dashboard — who/what the payment is
+  // owed to, distinct from the title so renaming a person/company doesn't
+  // require rewriting every installment's title text. Falls back to title
+  // for entries created before this field existed (see repaymentByAccount).
+  if (t.account === undefined) t.account = '';
   // Legacy tasks (saved before this field existed) default to today rather
   // than an unknown past date, so they don't immediately show as stale.
   if (t.createdAt === undefined) t.createdAt = fmtDate(new Date());
@@ -1652,7 +1657,7 @@ function searchAll(query) {
   const results = [];
 
   allTasksFlat().forEach(({t, d}) => {
-    if ((t.title || '').toLowerCase().includes(q) || (t.meta || '').toLowerCase().includes(q) || (t.notes || '').toLowerCase().includes(q)) {
+    if ((t.title || '').toLowerCase().includes(q) || (t.meta || '').toLowerCase().includes(q) || (t.notes || '').toLowerCase().includes(q) || (t.account || '').toLowerCase().includes(q)) {
       results.push({ kind: 'task', t, d });
     }
   });
@@ -2095,19 +2100,23 @@ function payablesRollup() {
   return { total, overdue, dueThisWeek, count: open.length };
 }
 
-// Groups Repayment Dashboard entries into "accounts" by exact title match —
-// this is how a multi-installment loan actually shows up in the data: the
-// bulk repeating-series generator (and pasted rows sharing a name) produce
-// several entries with the same title and different dates/costs, so a title
-// is the closest thing to an account/creditor identifier without adding a
-// dedicated field just for this chart.
+// Groups Repayment Dashboard entries by their account (person/company).
+// Entries saved before the account field existed fall back to their title,
+// which is what the grouping used before — so old data keeps grouping the
+// same way it always did until you go back and assign it a real account.
+function accountKnownNames() {
+  const names = new Set();
+  (state.desks.pay || []).forEach(t => { if (t.account) names.add(t.account); });
+  return [...names].sort();
+}
 function repaymentByAccount() {
   const items = (state.desks.pay || []).filter(t => typeof t.cost === 'number' && t.cost > 0);
   const groups = {};
   items.forEach(t => {
-    if (!groups[t.title]) groups[t.title] = { title: t.title, paid: 0, outstanding: 0 };
-    if (t.done) groups[t.title].paid += t.cost;
-    else groups[t.title].outstanding += t.cost;
+    const key = t.account || t.title;
+    if (!groups[key]) groups[key] = { account: key, paid: 0, outstanding: 0 };
+    if (t.done) groups[key].paid += t.cost;
+    else groups[key].outstanding += t.cost;
   });
   return Object.values(groups).sort((a, b) => (b.paid + b.outstanding) - (a.paid + a.outstanding));
 }
@@ -2123,7 +2132,7 @@ function renderRepaymentSummary() {
 
   const accountBarsHtml = accounts.map(a => `
     <div class="prod-bar-row">
-      <div class="prod-bar-label" title="${escHtml(a.title)}">${escHtml(a.title)}</div>
+      <div class="prod-bar-label" title="${escHtml(a.account)}">${escHtml(a.account)}</div>
       <div class="prod-bar-track" style="display:flex;overflow:hidden">
         ${a.paid ? `<div style="flex:${a.paid};background:var(--green)" title="Paid: ${fmtCost(a.paid)}"></div>` : ''}
         ${a.outstanding ? `<div style="flex:${a.outstanding};background:var(--p1-color)" title="Outstanding: ${fmtCost(a.outstanding)}"></div>` : ''}
@@ -2361,9 +2370,12 @@ function renderDeskMain() {
         onclick="event.stopPropagation()" onkeydown="handleAddKey(event, '${activeView}')">
       ${activeView === 'pay' ? `<input class="add-input" id="add-cost-${activeView}" type="number" min="0" step="0.01" placeholder="Amount (₱)" style="flex:0 0 130px"
         onclick="event.stopPropagation()" onkeydown="handleAddKey(event, '${activeView}')">` : ''}
+      ${activeView === 'pay' ? `<input class="add-input" id="add-account-${activeView}" list="account-datalist" placeholder="Person/company" style="flex:0 0 150px"
+        onclick="event.stopPropagation()" onkeydown="handleAddKey(event, '${activeView}')">` : ''}
       <select class="add-priority-select" id="add-priority-${activeView}" onclick="event.stopPropagation()">${priorityOptionsHtml('p2')}</select>
       <button class="btn btn-primary" onclick="event.stopPropagation(); addTask('${activeView}')">＋ Add</button>
     </div>
+    ${activeView === 'pay' ? `<datalist id="account-datalist">${accountKnownNames().map(n => `<option value="${escHtml(n)}"></option>`).join('')}</datalist>` : ''}
 
     ${activeView === 'pay' ? renderRepaymentSummary() : ''}
 
@@ -2445,6 +2457,7 @@ function taskCardHTML(t) {
         <div class="task-controls">
           <button class="status-btn ${t.status}" onclick="cycleStatus('${t.id}')" title="Click to change status">${STATUS_LABELS[t.status]}</button>
           ${activeView === 'pay' ? `<input type="number" class="date-input" style="width:100px" min="0" step="0.01" placeholder="Amount ₱" value="${t.cost !== null && t.cost !== undefined ? t.cost : ''}" onchange="updateTaskCost('${t.id}', this.value)" title="Total amount for this payment">` : ''}
+          ${activeView === 'pay' ? `<input type="text" class="date-input" style="width:130px" list="account-datalist" placeholder="Person/company" value="${escHtml(t.account || '')}" onchange="updateTaskAccount('${t.id}', this.value)" title="Who this payment is owed to">` : ''}
           <select class="priority-btn priority-select ${effectivePriority(t)}" ${effectivePriority(t) !== t.priority ? 'title="Past due date — showing as Overdue"' : ''} onchange="updateTaskPriority('${t.id}', this.value)">${priorityOptionsHtml(effectivePriority(t))}</select>
           <input type="date" class="date-input" value="${t.date || ''}" onchange="updateTaskDate('${t.id}', this.value)" title="Due date">
           <button class="delete-btn" onclick="duplicateTask('${t.id}')" title="Duplicate task">⧉</button>
@@ -3542,6 +3555,11 @@ function updateTaskCost(id, val) {
   if (t) { const n = parseFloat(val); t.cost = isNaN(n) ? null : n; saveState(); renderAll(); }
 }
 
+function updateTaskAccount(id, val) {
+  const t = findTask(id);
+  if (t) { t.account = val.trim(); saveState(); renderAll(); }
+}
+
 function cycleStatus(id) {
   const t = findTask(id);
   if (t) {
@@ -3643,6 +3661,7 @@ function addTask(deskId) {
   const linkInput = document.getElementById('add-link-' + deskId);
   const priSel = document.getElementById('add-priority-' + deskId);
   const costInput = document.getElementById('add-cost-' + deskId);
+  const accountInput = document.getElementById('add-account-' + deskId);
   const title = input.value.trim();
   if (!title) { input.focus(); return; }
   const costVal = costInput ? parseFloat(costInput.value) : NaN;
@@ -3658,12 +3677,14 @@ function addTask(deskId) {
     link: linkInput ? linkInput.value.trim() : '',
     kind: defaultKindForDesk(deskId),
     cost: isNaN(costVal) ? null : costVal,
+    account: accountInput ? accountInput.value.trim() : '',
   });
   if (!state.desks[deskId]) state.desks[deskId] = [];
   state.desks[deskId].unshift(newTask);
   saveState();
   input.value = '';
   if (costInput) costInput.value = '';
+  if (accountInput) accountInput.value = '';
   if (linkInput) linkInput.value = '';
   renderAll();
 }
@@ -3689,8 +3710,8 @@ function openBulkAddModal(deskId) {
 
           <div>
             <div style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:4px">Paste multiple rows</div>
-            <div style="font-size:11px;color:var(--muted);margin-bottom:6px">One entry per line: Title, Amount, Date. Paste straight from a spreadsheet (tab-separated) or comma-separate it yourself. Amount and date are optional per line.</div>
-            <textarea id="bulk-paste-text" rows="6" style="width:100%;box-sizing:border-box;font-family:inherit;font-size:12px;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text)" placeholder="Supplier invoice #2024-441, 38500, 2026-07-23"></textarea>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:6px">One entry per line: Title, Amount, Date${isPay ? ', Account (person/company)' : ''}. Paste straight from a spreadsheet (tab-separated) or comma-separate it yourself. ${isPay ? 'Amount, date, and account' : 'Amount and date'} are optional per line.</div>
+            <textarea id="bulk-paste-text" rows="6" style="width:100%;box-sizing:border-box;font-family:inherit;font-size:12px;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text)" placeholder="${isPay ? 'Loan installment #4, 37500, 2026-07-23, RATHOR' : 'Supplier invoice #2024-441, 38500, 2026-07-23'}"></textarea>
             <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
               <button class="btn btn-primary" onclick="bulkAddFromPaste('${deskId}')">＋ Add pasted rows</button>
             </div>
@@ -3702,6 +3723,7 @@ function openBulkAddModal(deskId) {
             <div style="display:flex;flex-wrap:wrap;gap:8px">
               <input class="add-input" id="bulk-rep-title" placeholder="Title…" style="flex:2;min-width:160px">
               ${isPay ? `<input class="add-input" id="bulk-rep-cost" type="number" min="0" step="0.01" placeholder="Amount (₱)" style="flex:0 0 110px">` : ''}
+              ${isPay ? `<input class="add-input" id="bulk-rep-account" list="account-datalist" placeholder="Person/company" style="flex:0 0 140px">` : ''}
               <input type="date" class="date-input" id="bulk-rep-start" title="First due date">
               <select class="add-priority-select" id="bulk-rep-every" title="Repeat interval">
                 <option value="1">Every day</option>
@@ -3743,7 +3765,8 @@ function parseBulkLine(line) {
     cost = isNaN(n) ? null : n;
   }
   const date = parts[2] !== undefined ? parseFlexibleDate(parts[2]) : '';
-  return { title, cost, date };
+  const account = parts[3] !== undefined ? parts[3].trim() : '';
+  return { title, cost, date, account };
 }
 
 function bulkAddFromPaste(deskId) {
@@ -3753,12 +3776,12 @@ function bulkAddFromPaste(deskId) {
   if (!state.desks[deskId]) state.desks[deskId] = [];
   let added = 0;
   lines.forEach(line => {
-    const { title, cost, date } = parseBulkLine(line);
+    const { title, cost, date, account } = parseBulkLine(line);
     if (!title) return;
     state.desks[deskId].unshift(normalizeTask({
       id: deskId + '_' + Date.now() + '_' + added,
       title, meta: '', priority: 'p2', done: false, notes: '', date, status: 'not-started', link: '',
-      kind: defaultKindForDesk(deskId), cost,
+      kind: defaultKindForDesk(deskId), cost, account,
     }));
     added++;
   });
@@ -3774,6 +3797,8 @@ function bulkAddRepeating(deskId) {
   if (!title || !startVal) return;
   const costEl = document.getElementById('bulk-rep-cost');
   const costVal = costEl ? parseFloat(costEl.value) : NaN;
+  const accountEl = document.getElementById('bulk-rep-account');
+  const account = accountEl ? accountEl.value.trim() : '';
   const everyDays = parseInt(document.getElementById('bulk-rep-every').value, 10) || 7;
   const count = Math.max(1, Math.min(52, parseInt(document.getElementById('bulk-rep-count').value, 10) || 1));
   const start = new Date(startVal + 'T00:00:00');
@@ -3785,7 +3810,7 @@ function bulkAddRepeating(deskId) {
     state.desks[deskId].unshift(normalizeTask({
       id: deskId + '_' + Date.now() + '_' + i,
       title, meta: '', priority: 'p2', done: false, notes: '', date: fmtDate(d), status: 'not-started', link: '',
-      kind: defaultKindForDesk(deskId), cost: isNaN(costVal) ? null : costVal,
+      kind: defaultKindForDesk(deskId), cost: isNaN(costVal) ? null : costVal, account,
     }));
   }
   saveState();
