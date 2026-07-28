@@ -269,6 +269,15 @@
   .g3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; }
   .g4 { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
 
+  /* ── Rating distribution (Letterboxd-style histogram) ── */
+  .rating-hist-avg { text-align: center; font-size: 20px; font-weight: 800; font-family: 'Bricolage Grotesque', sans-serif; color: var(--text); margin-bottom: 8px; }
+  .rating-hist-avg-sub { display: block; font-size: 10px; font-weight: 500; color: var(--text3); margin-top: 1px; }
+  .rating-hist-bars { display: flex; align-items: flex-end; gap: 3px; height: 64px; }
+  .rating-hist-bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+  .rating-hist-bar { width: 100%; min-height: 2px; background: var(--amber); border-radius: 2px 2px 0 0; transition: opacity .1s; }
+  .rating-hist-bar-wrap:hover .rating-hist-bar { opacity: .7; }
+  .rating-hist-lbl { font-size: 8px; color: var(--text3); margin-top: 3px; }
+
   /* Portfolio's tiles read as cramped at the default gap/margins — more
      breathing room here specifically, rather than changing .g2/.g3/.g4 for
      every other page that also uses them. */
@@ -4756,7 +4765,7 @@ function interestChartGroupHTML(label, items, doneLabel) {
   const done = items.filter(it => it.done).length;
   return `<div class="interest-chart-group">
     <div class="chart-title">${label}</div>
-    <div class="g2">
+    <div class="g3">
       <div class="card">
         <div class="f11 tc" style="margin-bottom:4px">Genre — ${tagged}/${items.length} tagged</div>
         ${svgDonut(genreSlicesFor(items))}
@@ -4765,8 +4774,32 @@ function interestChartGroupHTML(label, items, doneLabel) {
         <div class="f11 tc" style="margin-bottom:4px">${doneLabel} — ${done}/${items.length}</div>
         ${svgDonut(doneSlicesFor(items, doneLabel))}
       </div>
+      <div class="card">
+        <div class="f11 tc" style="margin-bottom:4px">Rating distribution</div>
+        ${ratingHistogramHTML(items)}
+      </div>
     </div>
   </div>`;
+}
+
+// Letterboxd-style rating distribution: a bar per rating value (this app
+// rates on a 1-10 scale, not Letterboxd's half-stars) sized by how many
+// items got that rating, plus the average across everything that's rated.
+function ratingHistogramHTML(items) {
+  const rated = items.filter(it => it.rating);
+  const total = rated.length;
+  if (!total) return `<div class="chart-empty">No ratings yet.</div>`;
+  const counts = new Array(10).fill(0);
+  rated.forEach(it => counts[it.rating - 1]++);
+  const max = Math.max(...counts);
+  const avg = rated.reduce((s, it) => s + it.rating, 0) / total;
+  const bars = counts.map((c, i) => `
+    <div class="rating-hist-bar-wrap" title="${i + 1}/10 — ${c} rated">
+      <div class="rating-hist-bar" style="height:${c ? Math.max(6, Math.round(c / max * 100)) : 0}%"></div>
+      <div class="rating-hist-lbl">${i + 1}</div>
+    </div>`).join("");
+  return `<div class="rating-hist-avg">${avg.toFixed(1)}<span class="rating-hist-avg-sub">avg · ${total} rated</span></div>
+    <div class="rating-hist-bars">${bars}</div>`;
 }
 
 // Generic live-search: filters an items array by title/person/author/genre
