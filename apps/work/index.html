@@ -1030,6 +1030,7 @@ body {
 .prod-bar-track { flex: 1; background: var(--bg); border-radius: 4px; height: 16px; }
 .prod-bar-fill { height: 100%; background: var(--navy-light); border-radius: 4px; }
 .prod-bar-value { width: 22px; font-size: 11px; color: var(--text-2); text-align: right; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.repay-bar-value { width: 84px; font-size: 11px; color: var(--text-2); text-align: right; flex-shrink: 0; font-variant-numeric: tabular-nums; }
 
 @media (max-width: 860px) {
   .prod-grid { grid-template-columns: 1fr; }
@@ -2094,6 +2095,74 @@ function payablesRollup() {
   return { total, overdue, dueThisWeek, count: open.length };
 }
 
+// Groups Repayment Dashboard entries into "accounts" by exact title match —
+// this is how a multi-installment loan actually shows up in the data: the
+// bulk repeating-series generator (and pasted rows sharing a name) produce
+// several entries with the same title and different dates/costs, so a title
+// is the closest thing to an account/creditor identifier without adding a
+// dedicated field just for this chart.
+function repaymentByAccount() {
+  const items = (state.desks.pay || []).filter(t => typeof t.cost === 'number' && t.cost > 0);
+  const groups = {};
+  items.forEach(t => {
+    if (!groups[t.title]) groups[t.title] = { title: t.title, paid: 0, outstanding: 0 };
+    if (t.done) groups[t.title].paid += t.cost;
+    else groups[t.title].outstanding += t.cost;
+  });
+  return Object.values(groups).sort((a, b) => (b.paid + b.outstanding) - (a.paid + a.outstanding));
+}
+
+function renderRepaymentSummary() {
+  const accounts = repaymentByAccount();
+  const totalPaid = accounts.reduce((s, a) => s + a.paid, 0);
+  const totalOutstanding = accounts.reduce((s, a) => s + a.outstanding, 0);
+  const grandTotal = totalPaid + totalOutstanding;
+  if (!grandTotal) return '';
+
+  const pct = Math.round((totalPaid / grandTotal) * 100);
+
+  const accountBarsHtml = accounts.map(a => `
+    <div class="prod-bar-row">
+      <div class="prod-bar-label" title="${escHtml(a.title)}">${escHtml(a.title)}</div>
+      <div class="prod-bar-track" style="display:flex;overflow:hidden">
+        ${a.paid ? `<div style="flex:${a.paid};background:var(--green)" title="Paid: ${fmtCost(a.paid)}"></div>` : ''}
+        ${a.outstanding ? `<div style="flex:${a.outstanding};background:var(--p1-color)" title="Outstanding: ${fmtCost(a.outstanding)}"></div>` : ''}
+      </div>
+      <div class="repay-bar-value">${fmtCost(a.paid + a.outstanding)}</div>
+    </div>`).join('');
+
+  return `
+    <div class="section-divider">
+      <span class="section-divider-label">Repayment summary</span>
+      <div class="section-divider-line"></div>
+    </div>
+    <div class="prod-grid">
+      <div class="prod-card">
+        <div class="prod-card-title">Paid vs outstanding</div>
+        <div class="prod-meter-row">
+          <div class="prod-meter-track"><div class="prod-meter-fill" style="width:${pct}%"></div></div>
+          <div class="prod-meter-value">${pct}%</div>
+        </div>
+        <div class="prod-card-sub">${fmtCost(totalPaid)} paid of ${fmtCost(grandTotal)} tracked</div>
+      </div>
+      <div class="prod-card">
+        <div class="prod-card-title">Totals</div>
+        <div class="prod-stack">
+          ${totalPaid ? `<div style="flex:${totalPaid};background:var(--green)" title="Paid: ${fmtCost(totalPaid)}"></div>` : ''}
+          ${totalOutstanding ? `<div style="flex:${totalOutstanding};background:var(--p1-color)" title="Outstanding: ${fmtCost(totalOutstanding)}"></div>` : ''}
+        </div>
+        <div class="prod-legend">
+          <span class="prod-legend-item"><span class="prod-legend-swatch" style="background:var(--green)"></span>Paid — ${fmtCost(totalPaid)}</span>
+          <span class="prod-legend-item"><span class="prod-legend-swatch" style="background:var(--p1-color)"></span>Outstanding — ${fmtCost(totalOutstanding)}</span>
+        </div>
+      </div>
+      <div class="prod-card prod-card-wide">
+        <div class="prod-card-title">By account — paid vs owed</div>
+        <div class="prod-bars">${accountBarsHtml}</div>
+      </div>
+    </div>`;
+}
+
 function buildDailyBriefText() {
   const today = fmtDate(new Date());
   const lines = [`Qualitech Philippines — Morning brief — ${fmtDisplayDate(today)}`, ''];
@@ -2295,6 +2364,8 @@ function renderDeskMain() {
       <select class="add-priority-select" id="add-priority-${activeView}" onclick="event.stopPropagation()">${priorityOptionsHtml('p2')}</select>
       <button class="btn btn-primary" onclick="event.stopPropagation(); addTask('${activeView}')">＋ Add</button>
     </div>
+
+    ${activeView === 'pay' ? renderRepaymentSummary() : ''}
 
     <div class="tasks-list" id="tasks-list">`;
 
