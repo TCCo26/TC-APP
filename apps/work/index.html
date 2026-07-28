@@ -2630,6 +2630,36 @@ function handleCalDrop(ev, dateStr) {
   renderCalendarMain();
 }
 
+// Auto-scroll while dragging: native HTML5 drag-and-drop doesn't move the
+// page on its own, so without this, calendar rows below the fold are
+// unreachable while a chip is being dragged — the pointer can't get there
+// and the page won't come to meet it. Speed ramps up the closer the pointer
+// gets to the top/bottom edge, and stops the moment the drag ends.
+const DRAG_SCROLL_MARGIN = 90;
+const DRAG_SCROLL_MAX_SPEED = 22;
+let dragAutoScrollY = null;
+let dragAutoScrollRAF = null;
+
+function dragAutoScrollTick() {
+  if (dragAutoScrollY === null) { dragAutoScrollRAF = null; return; }
+  const vh = window.innerHeight;
+  let dy = 0;
+  if (dragAutoScrollY < DRAG_SCROLL_MARGIN) {
+    dy = -DRAG_SCROLL_MAX_SPEED * (1 - dragAutoScrollY / DRAG_SCROLL_MARGIN);
+  } else if (dragAutoScrollY > vh - DRAG_SCROLL_MARGIN) {
+    dy = DRAG_SCROLL_MAX_SPEED * (1 - (vh - dragAutoScrollY) / DRAG_SCROLL_MARGIN);
+  }
+  if (dy) window.scrollBy(0, dy);
+  dragAutoScrollRAF = requestAnimationFrame(dragAutoScrollTick);
+}
+
+document.addEventListener('dragover', (ev) => {
+  dragAutoScrollY = ev.clientY;
+  if (!dragAutoScrollRAF) dragAutoScrollRAF = requestAnimationFrame(dragAutoScrollTick);
+});
+document.addEventListener('dragend', () => { dragAutoScrollY = null; });
+document.addEventListener('drop', () => { dragAutoScrollY = null; });
+
 function addMeeting() {
   const title = document.getElementById('mtg-title').value.trim();
   const date = document.getElementById('mtg-date').value;
