@@ -951,6 +951,7 @@
       <h1>Life OS</h1>
       <p>Everything in one place. Click any item to check it off. Click text to edit it.</p>
     </div>
+    <div id="vacation-banner"></div>
     <div class="g4" id="overview-stats"></div>
     <div class="sl">Weekday routine — <span id="routine-stat"></span><span id="routine-streak" style="margin-left:6px;color:var(--text3);font-weight:400"></span></div>
     <div class="card" id="routine-checklist"></div>
@@ -1409,6 +1410,17 @@
       <div class="card-title">Alerts: <span id="notif-status-text">off</span></div>
       <div class="card-desc">Today's calendar events (once a day) with a heads-up shortly before one starts, plus a once-a-day bills digest and a nudge the moment a priority expense goes overdue. Needs cloud sync connected — the calendar part also needs a feed set up on the Calendar page.</div>
       <div style="margin-top:8px"><button class="btn" id="notif-toggle-btn" onclick="toggleNotifications()">Turn on</button></div>
+    </div>
+    <div class="sl">Vacation mode</div>
+    <div class="card" style="margin-bottom:1rem">
+      <div class="card-title">Status: <span id="vacation-status-text">off</span></div>
+      <div class="card-desc">While set, the weekday routine streak treats these days as skipped rather than missed, and calendar/bills push notifications pause — both stop even with the app fully closed.</div>
+      <div class="add-row" style="margin-top:8px">
+        <input type="date" id="vacation-start-inp">
+        <input type="date" id="vacation-end-inp">
+        <button onclick="saveVacation()">Save</button>
+      </div>
+      <div style="margin-top:8px"><button class="btn" id="vacation-clear-btn" onclick="clearVacation()" style="display:none">Clear</button></div>
     </div>
     <div class="sl">Backup</div>
     <div class="card" style="margin-bottom:1rem">
@@ -2331,12 +2343,58 @@ function renderNotifStatus() {
   btn.textContent = enabled ? 'Turn off' : 'Turn on';
 }
 
+function renderVacationStatus() {
+  const t = document.getElementById('vacation-status-text');
+  if (!t) return;
+  const clearBtn = document.getElementById('vacation-clear-btn');
+  const startInp = document.getElementById('vacation-start-inp');
+  const endInp = document.getElementById('vacation-end-inp');
+  const v = STATE.vacation;
+  if (v && v.start && v.end) {
+    t.textContent = `${v.start} – ${v.end}${isVacationActive() ? ' (active)' : ''}`;
+    if (clearBtn) clearBtn.style.display = '';
+    if (startInp) startInp.value = v.start;
+    if (endInp) endInp.value = v.end;
+  } else {
+    t.textContent = 'off';
+    if (clearBtn) clearBtn.style.display = 'none';
+  }
+  renderVacationBanner();
+}
+
+function renderVacationBanner() {
+  const el = document.getElementById('vacation-banner');
+  if (!el) return;
+  if (!isVacationActive()) { el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="card" style="margin-bottom:1rem;display:flex;align-items:center;gap:10px">
+    <span style="font-size:18px">🌴</span>
+    <div class="card-desc" style="margin:0">On vacation through ${STATE.vacation.end} — the routine streak and push notifications are paused.</div>
+    <button class="btn" style="margin-left:auto;font-size:11px" onclick="clearVacation()">End now</button>
+  </div>`;
+}
+
+function saveVacation() {
+  const start = document.getElementById('vacation-start-inp').value;
+  const end = document.getElementById('vacation-end-inp').value;
+  if (!start || !end || end < start) { alert('Pick a valid date range.'); return; }
+  STATE.vacation = { start, end };
+  saveState();
+  renderVacationStatus();
+}
+
+function clearVacation() {
+  STATE.vacation = null;
+  saveState();
+  renderVacationStatus();
+}
+
 function boot() {
   renderSidebar();
   renderOverview();
   applyNavCollapse();
   applyThemeIcon();
   pullRemote();
+  renderVacationStatus();
   if (notifActive()) subscribeForPush();
 }
 
@@ -2636,12 +2694,21 @@ function isWeekday(date) {
   const d = date.getDay();
   return d >= 1 && d <= 5;
 }
+
+// Vacation mode: a date range during which the routine streak treats days
+// as skipped rather than missed, and push notifications (calendar digest,
+// bills digest, overdue nudges) pause entirely — set from Settings.
+function isVacationActive(iso) {
+  iso = iso || new Date().toISOString().slice(0, 10);
+  return !!(STATE.vacation && STATE.vacation.start && STATE.vacation.end && iso >= STATE.vacation.start && iso <= STATE.vacation.end);
+}
+
 // The routine is weekday-only, so a streak's "yesterday" needs to skip
 // weekends — otherwise every Monday would reset a streak that was actually
-// unbroken since Friday.
+// unbroken since Friday. Vacation days get skipped the same way.
 function previousWeekday(date) {
   const d = new Date(date);
-  do { d.setDate(d.getDate() - 1); } while (!isWeekday(d));
+  do { d.setDate(d.getDate() - 1); } while (!isWeekday(d) || isVacationActive(d.toISOString().slice(0, 10)));
   return d;
 }
 
@@ -2751,6 +2818,7 @@ function renderOverview() {
   const places = STATE.travelList.filter(t => STATE.travelState[t.n]).length;
 
   renderMoneyRollup();
+  renderVacationBanner();
 
   document.getElementById("overview-stats").innerHTML = `
     <div class="stat-card"><div class="stat-val">${tried}</div><div class="stat-lbl">hobbies tried</div></div>
@@ -5060,6 +5128,7 @@ function renderSettings() {
   if (fh) fh.value = STATE.apiKeys.finnhub || "";
   renderSyncBadge();
   renderNotifStatus();
+  renderVacationStatus();
 }
 
 // ─── INTERACTIONS ─────────────────────────────────────────────────────────────
