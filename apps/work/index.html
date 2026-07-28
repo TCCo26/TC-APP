@@ -1528,6 +1528,8 @@ let state = loadState();
 let activeView = 'overview';       // 'overview' | 'calendar' | 'notes' | 'links' | a desk id
 let calYear = new Date().getFullYear();
 let calMonth = new Date().getMonth();
+let calFilterDesk = null;          // null = all desks
+let calFilterPaymentsOnly = false;
 let currentNoteId = null;          // id of the note entry currently open in the editor
 let notesFilterDesk = null;        // null = all desks
 let notesSearchQuery = '';
@@ -2421,14 +2423,24 @@ function isStale(t) {
   return !t.done && !!t.createdAt && daysSince(t.createdAt) >= STALE_DAYS;
 }
 
+// Meetings aren't tied to a desk or a payment kind, so a desk/payments
+// filter hides them entirely rather than showing an unfiltered leftover.
+function calFiltersActive() {
+  return !!(calFilterDesk || calFilterPaymentsOnly);
+}
 function eventsForDate(dateStr) {
   const evs = [];
   allTasksFlat().forEach(({t, d}) => {
-    if (t.date === dateStr) evs.push({ type:'task', id:t.id, title:t.title, deskId:d.id, deskName:d.name, deskIcon:d.icon, deskBg:d.ic_bg, deskColor:d.ic_color, priority:effectivePriority(t), done:t.done, kind:t.kind, cost:t.cost });
+    if (t.date !== dateStr) return;
+    if (calFilterDesk && d.id !== calFilterDesk) return;
+    if (calFilterPaymentsOnly && t.kind !== 'payment') return;
+    evs.push({ type:'task', id:t.id, title:t.title, deskId:d.id, deskName:d.name, deskIcon:d.icon, deskBg:d.ic_bg, deskColor:d.ic_color, priority:effectivePriority(t), done:t.done, kind:t.kind, cost:t.cost });
   });
-  (state.meetings || []).forEach(m => {
-    if (m.date === dateStr) evs.push({ type:'meeting', id:m.id, title:m.title, time:m.time });
-  });
+  if (!calFiltersActive()) {
+    (state.meetings || []).forEach(m => {
+      if (m.date === dateStr) evs.push({ type:'meeting', id:m.id, title:m.title, time:m.time });
+    });
+  }
   return evs;
 }
 
@@ -2507,7 +2519,9 @@ function renderCalendarMain() {
       </div>`;
   }
 
-  const unscheduled = allTasksFlat().filter(({t}) => !t.done && !t.date);
+  const unscheduled = allTasksFlat().filter(({t, d}) => !t.done && !t.date
+    && (!calFilterDesk || d.id === calFilterDesk)
+    && (!calFilterPaymentsOnly || t.kind === 'payment'));
 
   let html = `
     <div class="desk-header">
@@ -2520,6 +2534,17 @@ function renderCalendarMain() {
         <div style="font-size:13px;font-weight:600;padding:0 6px;display:flex;align-items:center;min-width:130px;justify-content:center">${monthNames[calMonth]} ${calYear}</div>
         <button class="btn" onclick="shiftMonth(1)">Next ›</button>
       </div>
+    </div>
+
+    <div class="desk-actions" style="flex-wrap:wrap;margin-bottom:12px">
+      <select class="add-priority-select" onchange="setCalFilterDesk(this.value)">
+        <option value="" ${!calFilterDesk ? 'selected' : ''}>All desks</option>
+        ${DESKS.map(d => `<option value="${d.id}" ${calFilterDesk === d.id ? 'selected' : ''}>${d.icon} ${d.name}</option>`).join('')}
+      </select>
+      <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text-2);cursor:pointer;user-select:none">
+        <input type="checkbox" ${calFilterPaymentsOnly ? 'checked' : ''} onchange="toggleCalFilterPayments(this.checked)"> Payments only
+      </label>
+      ${calFiltersActive() ? `<button class="btn" onclick="clearCalFilters()">✕ Clear filter</button>` : ''}
     </div>
 
     <div class="section-divider">
@@ -2553,6 +2578,20 @@ function renderCalendarMain() {
   `;
 
   document.getElementById('main-content').innerHTML = html;
+}
+
+function setCalFilterDesk(val) {
+  calFilterDesk = val || null;
+  renderCalendarMain();
+}
+function toggleCalFilterPayments(checked) {
+  calFilterPaymentsOnly = checked;
+  renderCalendarMain();
+}
+function clearCalFilters() {
+  calFilterDesk = null;
+  calFilterPaymentsOnly = false;
+  renderCalendarMain();
 }
 
 function shiftMonth(delta) {
