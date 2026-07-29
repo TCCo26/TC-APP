@@ -508,6 +508,19 @@
      no visible boundary without this border — it just disappears. */
   .add-row input:focus, .add-row select:focus { background: var(--bg4); }
   .add-row select option { background: var(--bg2); color: var(--text); }
+
+  /* ── Weekly focus picker (6-9 PM block) ── */
+  .focus-select {
+    width: 100%; font-size: 12px; padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--bg3); color: var(--text);
+    font-family: inherit; outline: none;
+    transition: background .13s;
+  }
+  .focus-select:focus { background: var(--bg4); }
+  .focus-select option, .focus-select optgroup { background: var(--bg2); color: var(--text); }
+  .focus-select optgroup { font-weight: 700; font-style: normal; }
   .add-row button, .btn {
     font-size: 12px; padding: 8px 14px;
     border-radius: var(--radius-sm);
@@ -2724,12 +2737,41 @@ function weekStartIso(d) {
 }
 
 function skillPool() { return (STATE.skills || []).slice().sort(); }
-function educationPool() {
-  const courses = (STATE.eduContent || EDU).map(e => e.title);
-  const selfStudy = (STATE.studyTopics || []).map(t => t.title);
-  return [...new Set([...courses, ...selfStudy])].sort();
+function educationCoursePool() { return (STATE.eduContent || EDU).map(e => e.title); }
+function educationSelfStudyPool() { return (STATE.studyTopics || []).map(t => t.title); }
+function hobbyGroups() {
+  return [
+    { label: "Physical", items: [...PHYSICAL].sort() },
+    { label: "Artistic", items: [...ARTISTIC].sort() },
+    { label: "Mental & educational", items: [...MENTAL].sort() },
+  ];
 }
-function hobbyPool() { return [...PHYSICAL, ...ARTISTIC, ...MENTAL].sort(); }
+
+// Renders a <select>'s options grouped under <optgroup>s instead of one long
+// flat list — the hobby list alone is ~55 entries, hard to scan unsorted by
+// category. Empty groups are skipped. A hobby's tried/proficient state (if
+// any) is appended so the picker doubles as a nudge toward what's already
+// underway.
+function focusSelectOptionsGrouped(groups, sel, hintFn) {
+  const html = groups
+    .filter(g => g.items.length)
+    .map(g => `<optgroup label="${escHtml(g.label)}">${g.items.map(v => {
+      const hint = hintFn ? hintFn(v) : "";
+      return `<option value="${escHtml(v)}" ${v === sel ? "selected" : ""}>${escHtml(v)}${hint}</option>`;
+    }).join("")}</optgroup>`)
+    .join("");
+  return `<option value="">— choose —</option>${html}`;
+}
+function hobbyStateHint(h) {
+  const st = STATE.hobbyState[h];
+  return st === "tried" ? " · tried" : st === "mastered" ? " · proficient" : "";
+}
+function skillSelectOptions(sel) {
+  const pool = skillPool();
+  if (!pool.length) return `<option value="">— choose —</option><option value="" disabled>Add a skill on Hobbies or Education first</option>`;
+  return `<option value="">— choose —</option>` + pool.map(v =>
+    `<option value="${escHtml(v)}" ${v === sel ? "selected" : ""}>${escHtml(v)}</option>`).join("");
+}
 
 function renderWeeklyFocus() {
   const el = document.getElementById("weekly-focus-card");
@@ -2737,8 +2779,10 @@ function renderWeeklyFocus() {
   if (!STATE.weeklyFocus) STATE.weeklyFocus = { weekStart: "", skill: "", education: "", hobby: "" };
   const wk = weekStartIso(new Date());
   const needsPick = STATE.weeklyFocus.weekStart !== wk;
-  const opt = (arr, sel) => `<option value="">— choose —</option>` + arr.map(v =>
-    `<option value="${escHtml(v)}" ${v === sel ? "selected" : ""}>${escHtml(v)}</option>`).join("");
+  const educationGroups = [
+    { label: "Courses", items: educationCoursePool() },
+    { label: "Self-study", items: educationSelfStudyPool() },
+  ];
   el.innerHTML = `
     <div class="f11" style="${needsPick ? "color:var(--amber)" : "color:var(--text3)"};margin-bottom:8px">
       ${needsPick ? "New week — pick your 3 focuses for the 6–9 PM block." : `Locked in for the week of ${wk}.`}
@@ -2746,15 +2790,15 @@ function renderWeeklyFocus() {
     <div class="g3">
       <div>
         <div class="f11 tc" style="margin-bottom:4px">Skill</div>
-        <select onchange="saveWeeklyFocusField('skill', this.value)">${opt(skillPool(), STATE.weeklyFocus.skill)}</select>
+        <select class="focus-select" onchange="saveWeeklyFocusField('skill', this.value)">${skillSelectOptions(STATE.weeklyFocus.skill)}</select>
       </div>
       <div>
         <div class="f11 tc" style="margin-bottom:4px">Education</div>
-        <select onchange="saveWeeklyFocusField('education', this.value)">${opt(educationPool(), STATE.weeklyFocus.education)}</select>
+        <select class="focus-select" onchange="saveWeeklyFocusField('education', this.value)">${focusSelectOptionsGrouped(educationGroups, STATE.weeklyFocus.education)}</select>
       </div>
       <div>
         <div class="f11 tc" style="margin-bottom:4px">Hobby</div>
-        <select onchange="saveWeeklyFocusField('hobby', this.value)">${opt(hobbyPool(), STATE.weeklyFocus.hobby)}</select>
+        <select class="focus-select" onchange="saveWeeklyFocusField('hobby', this.value)">${focusSelectOptionsGrouped(hobbyGroups(), STATE.weeklyFocus.hobby, hobbyStateHint)}</select>
       </div>
     </div>`;
 }
