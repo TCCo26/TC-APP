@@ -167,7 +167,27 @@ body {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  transition: width 0.15s;
 }
+
+/* Desktop-only full collapse (separate from the mobile slide-in above) —
+   frees up the rail's width for screenshots, e.g. of the Calendar page,
+   without the sidebar eating into the shot. */
+body.rail-collapsed .rail { width: 0; border-right: none; overflow: hidden; }
+body.rail-collapsed .main { margin-left: 0; }
+.rail-collapse-btn {
+  display: flex;
+  width: 30px; height: 30px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+  align-items: center; justify-content: center;
+  font-size: 14px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.rail-collapse-btn:hover { background: rgba(255,255,255,0.16); }
 
 .rail-section-label {
   font-size: 10px;
@@ -267,6 +287,7 @@ body {
   flex: 1;
   padding: 24px;
   min-width: 0;
+  transition: margin-left 0.15s;
 }
 
 .desk-header {
@@ -1228,6 +1249,9 @@ body {
   :root { --rail-w: 260px; --top-h: 140px; }
 
   .hamburger-btn { display: flex; }
+  .rail-collapse-btn { display: none; }
+  body.rail-collapsed .rail { width: var(--rail-w); }
+  body.rail-collapsed .main { margin-left: 0; }
 
   .topbar { padding: 0 14px; gap: 8px; }
   .brand-sub { display: none; }
@@ -1305,6 +1329,7 @@ body {
   <div class="topbar-row1">
     <div style="display:flex;align-items:center;gap:10px;min-width:0">
       <button class="hamburger-btn" onclick="toggleRail()" aria-label="Open menu">☰</button>
+      <button class="rail-collapse-btn" onclick="toggleRailCollapsed()" id="rail-collapse-btn" aria-label="Collapse sidebar" title="Collapse sidebar — more room for screenshots">◧</button>
       <div class="brand">
         <div class="brand-mark">QP</div>
         <div>
@@ -2031,6 +2056,19 @@ function toggleRail() {
   const backdrop = document.querySelector('.rail-backdrop');
   if (rail) rail.classList.toggle('open');
   if (backdrop) backdrop.classList.toggle('open');
+}
+
+// Desktop-only full collapse of the left rail — separate from the mobile
+// slide-in above — so the sidebar doesn't eat into a screenshot (e.g. of
+// the Calendar). Transient, like the other UI-only toggles in this file;
+// resets on reload.
+function toggleRailCollapsed() {
+  const collapsed = document.body.classList.toggle('rail-collapsed');
+  const btn = document.getElementById('rail-collapse-btn');
+  if (btn) {
+    btn.textContent = collapsed ? '◨' : '◧';
+    btn.title = collapsed ? 'Expand sidebar' : 'Collapse sidebar — more room for screenshots';
+  }
 }
 
 function closeRailMobile() {
