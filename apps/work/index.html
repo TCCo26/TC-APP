@@ -1041,16 +1041,16 @@ body {
 .prod-bar-value { width: 22px; font-size: 11px; color: var(--text-2); text-align: right; flex-shrink: 0; font-variant-numeric: tabular-nums; }
 .repay-bar-value { width: 110px; font-size: 11px; color: var(--text-2); text-align: right; flex-shrink: 0; font-variant-numeric: tabular-nums; line-height: 1.4; }
 .repay-bar-pct { display: block; font-size: 10px; color: var(--muted); }
-/* Paid vs outstanding: green (good/paid) paired with amber (still owed, not
-   necessarily overdue) rather than red — red is already reserved for
-   overdue/P1 elsewhere in the app, and green/red is a poor pair for the most
-   common form of color blindness. A 2px gap separates the two segments so
-   the split reads even without color. */
+/* Paid vs outstanding: green (paid) paired with red (outstanding), matching
+   the P1/overdue red used elsewhere in the app. A 2px gap separates the two
+   segments so the split still reads even without color, and each row's
+   value label spells out the split directly rather than relying on color
+   alone. */
 .prod-bar-seg-paid { background: var(--green); }
-.prod-bar-seg-outstanding { background: var(--p2-color); }
+.prod-bar-seg-outstanding { background: var(--p1-color); }
 .prod-bar-seg-paid.has-outstanding { box-shadow: inset -2px 0 0 var(--surface); }
 .prod-legend-swatch-paid { background: var(--green); }
-.prod-legend-swatch-outstanding { background: var(--p2-color); }
+.prod-legend-swatch-outstanding { background: var(--p1-color); }
 /* Caps the by-vendor/by-lender list to ~5 visible rows; the rest scrolls
    inside the card instead of pushing the page down. */
 .prod-bars-scroll { max-height: 224px; overflow-y: auto; padding-right: 4px; }
