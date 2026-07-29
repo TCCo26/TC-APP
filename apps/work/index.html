@@ -677,6 +677,15 @@ body {
   background: var(--border);
 }
 
+.section-divider.collapsible { cursor: pointer; user-select: none; }
+.section-divider-chevron {
+  font-size: 10px;
+  color: var(--muted);
+  width: 10px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
 /* ── EMPTY STATE ── */
 .empty-state {
   text-align: center;
@@ -1030,7 +1039,21 @@ body {
 .prod-bar-track { flex: 1; background: var(--bg); border-radius: 4px; height: 16px; }
 .prod-bar-fill { height: 100%; background: var(--navy-light); border-radius: 4px; }
 .prod-bar-value { width: 22px; font-size: 11px; color: var(--text-2); text-align: right; flex-shrink: 0; font-variant-numeric: tabular-nums; }
-.repay-bar-value { width: 84px; font-size: 11px; color: var(--text-2); text-align: right; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.repay-bar-value { width: 110px; font-size: 11px; color: var(--text-2); text-align: right; flex-shrink: 0; font-variant-numeric: tabular-nums; line-height: 1.4; }
+.repay-bar-pct { display: block; font-size: 10px; color: var(--muted); }
+/* Paid vs outstanding: green (good/paid) paired with amber (still owed, not
+   necessarily overdue) rather than red — red is already reserved for
+   overdue/P1 elsewhere in the app, and green/red is a poor pair for the most
+   common form of color blindness. A 2px gap separates the two segments so
+   the split reads even without color. */
+.prod-bar-seg-paid { background: var(--green); }
+.prod-bar-seg-outstanding { background: var(--p2-color); }
+.prod-bar-seg-paid.has-outstanding { box-shadow: inset -2px 0 0 var(--surface); }
+.prod-legend-swatch-paid { background: var(--green); }
+.prod-legend-swatch-outstanding { background: var(--p2-color); }
+/* Caps the by-vendor/by-lender list to ~5 visible rows; the rest scrolls
+   inside the card instead of pushing the page down. */
+.prod-bars-scroll { max-height: 224px; overflow-y: auto; padding-right: 4px; }
 
 @media (max-width: 860px) {
   .prod-grid { grid-template-columns: 1fr; }
@@ -1587,6 +1610,26 @@ const SORT_OPTIONS = [
 ];
 const SORT_OPTIONS_PAY = SORT_OPTIONS.concat([{ key:'amount', label:'Amount' }]);
 const SORT_LABELS = Object.fromEntries(SORT_OPTIONS_PAY.map(o => [o.key, o.label]));
+
+// Collapse state for classification headers (priority groups, the sorted-
+// flat section, and the Payables/Loans division headers) — transient,
+// resets on reload, same as the other per-desk UI state above.
+let collapsedSections = {};
+function toggleSectionCollapse(key) {
+  collapsedSections[key] = !collapsedSections[key];
+  renderDeskMain();
+}
+// Collapsed shows a down chevron (there's more below, click to reveal);
+// expanded shows an up chevron (click to close it back up).
+function sectionDividerHTML(key, label, big) {
+  const collapsed = !!collapsedSections[key];
+  return `
+    <div class="section-divider collapsible" onclick="toggleSectionCollapse('${key}')">
+      <span class="section-divider-chevron">${collapsed ? '▾' : '▴'}</span>
+      <span class="section-divider-label"${big ? ' style="font-size:13px;font-weight:700"' : ''}>${label}</span>
+      <div class="section-divider-line"></div>
+    </div>`;
+}
 
 function setDeskSort(deskId, mode) {
   deskSortMode[deskId] = mode;
@@ -2173,21 +2216,42 @@ function tasksForPayType(deskId, type) {
 // (person/company). Entries saved before the account field existed fall
 // back to their title, which is what the grouping used before — so old data
 // keeps grouping the same way it always did until you assign a real account.
+// Grouping keys are case/whitespace-normalized so "RATHOR" and "Rathor "
+// merge into one row instead of splitting into two — the display label
+// keeps whichever casing was seen first.
 function accountKnownNames(deskId, type) {
-  const names = new Set();
-  tasksForPayType(deskId, type).forEach(t => { if (t.account) names.add(t.account); });
-  return [...names].sort();
+  const seen = new Map();
+  tasksForPayType(deskId, type).forEach(t => {
+    if (!t.account) return;
+    const trimmed = t.account.trim();
+    const key = trimmed.toLowerCase();
+    if (trimmed && !seen.has(key)) seen.set(key, trimmed);
+  });
+  return [...seen.values()].sort();
 }
 function repaymentByAccount(deskId, type) {
   const items = tasksForPayType(deskId, type).filter(t => typeof t.cost === 'number' && t.cost > 0);
   const groups = {};
   items.forEach(t => {
-    const key = t.account || t.title;
-    if (!groups[key]) groups[key] = { account: key, paid: 0, outstanding: 0 };
+    const label = (t.account || t.title).trim();
+    const key = label.toLowerCase();
+    if (!groups[key]) groups[key] = { account: label, paid: 0, outstanding: 0 };
     if (t.done) groups[key].paid += t.cost;
     else groups[key].outstanding += t.cost;
   });
   return Object.values(groups).sort((a, b) => (b.paid + b.outstanding) - (a.paid + a.outstanding));
+}
+
+// Due-this-week / due-this-month totals for one payType section's still-open
+// entries — the weekly figure is a subset of the monthly one.
+function repaymentPeriodStats(deskId, type) {
+  const today = fmtDate(new Date());
+  const weekEnd = fmtDate(new Date(Date.now() + 7 * 86400000));
+  const monthEnd = fmtDate(new Date(Date.now() + 30 * 86400000));
+  const open = tasksForPayType(deskId, type).filter(t => !t.done && typeof t.cost === 'number');
+  const dueThisWeek = open.filter(t => t.date && t.date >= today && t.date <= weekEnd).reduce((s, t) => s + t.cost, 0);
+  const dueThisMonth = open.filter(t => t.date && t.date >= today && t.date <= monthEnd).reduce((s, t) => s + t.cost, 0);
+  return { dueThisWeek, dueThisMonth };
 }
 
 // Rendered once per payType section (Loans, Payables) within the Repayment
@@ -2203,16 +2267,21 @@ function renderRepaymentSummary(deskId, type) {
 
   const pct = Math.round((totalPaid / grandTotal) * 100);
   const byLabel = type === 'loan' ? 'By lender — paid vs owed' : 'By vendor — paid vs owed';
+  const period = repaymentPeriodStats(deskId, type);
 
-  const accountBarsHtml = accounts.map(a => `
+  const accountBarsHtml = accounts.map(a => {
+    const rowTotal = a.paid + a.outstanding;
+    const rowPct = rowTotal ? Math.round((a.paid / rowTotal) * 100) : 0;
+    return `
     <div class="prod-bar-row">
       <div class="prod-bar-label" title="${escHtml(a.account)}">${escHtml(a.account)}</div>
       <div class="prod-bar-track" style="display:flex;overflow:hidden">
-        ${a.paid ? `<div style="flex:${a.paid};background:var(--green)" title="Paid: ${fmtCost(a.paid)}"></div>` : ''}
-        ${a.outstanding ? `<div style="flex:${a.outstanding};background:var(--p1-color)" title="Outstanding: ${fmtCost(a.outstanding)}"></div>` : ''}
+        ${a.paid ? `<div class="prod-bar-seg-paid${a.outstanding ? ' has-outstanding' : ''}" style="flex:${a.paid}" title="Paid: ${fmtCost(a.paid)}"></div>` : ''}
+        ${a.outstanding ? `<div class="prod-bar-seg-outstanding" style="flex:${a.outstanding}" title="Outstanding: ${fmtCost(a.outstanding)}"></div>` : ''}
       </div>
-      <div class="repay-bar-value">${fmtCost(a.paid + a.outstanding)}</div>
-    </div>`).join('');
+      <div class="repay-bar-value">${fmtCost(rowTotal)}<span class="repay-bar-pct">${rowPct}% paid</span></div>
+    </div>`;
+  }).join('');
 
   return `
     <div class="prod-grid">
@@ -2223,21 +2292,22 @@ function renderRepaymentSummary(deskId, type) {
           <div class="prod-meter-value">${pct}%</div>
         </div>
         <div class="prod-card-sub">${fmtCost(totalPaid)} paid of ${fmtCost(grandTotal)} tracked</div>
+        <div class="prod-card-sub">${fmtCost(period.dueThisWeek)} due this week · ${fmtCost(period.dueThisMonth)} due this month</div>
       </div>
       <div class="prod-card">
         <div class="prod-card-title">Totals</div>
         <div class="prod-stack">
-          ${totalPaid ? `<div style="flex:${totalPaid};background:var(--green)" title="Paid: ${fmtCost(totalPaid)}"></div>` : ''}
-          ${totalOutstanding ? `<div style="flex:${totalOutstanding};background:var(--p1-color)" title="Outstanding: ${fmtCost(totalOutstanding)}"></div>` : ''}
+          ${totalPaid ? `<div class="prod-bar-seg-paid${totalOutstanding ? ' has-outstanding' : ''}" style="flex:${totalPaid}" title="Paid: ${fmtCost(totalPaid)}"></div>` : ''}
+          ${totalOutstanding ? `<div class="prod-bar-seg-outstanding" style="flex:${totalOutstanding}" title="Outstanding: ${fmtCost(totalOutstanding)}"></div>` : ''}
         </div>
         <div class="prod-legend">
-          <span class="prod-legend-item"><span class="prod-legend-swatch" style="background:var(--green)"></span>Paid — ${fmtCost(totalPaid)}</span>
-          <span class="prod-legend-item"><span class="prod-legend-swatch" style="background:var(--p1-color)"></span>Outstanding — ${fmtCost(totalOutstanding)}</span>
+          <span class="prod-legend-item"><span class="prod-legend-swatch prod-legend-swatch-paid"></span>Paid — ${fmtCost(totalPaid)}</span>
+          <span class="prod-legend-item"><span class="prod-legend-swatch prod-legend-swatch-outstanding"></span>Outstanding — ${fmtCost(totalOutstanding)}</span>
         </div>
       </div>
       <div class="prod-card prod-card-wide">
         <div class="prod-card-title">${byLabel}</div>
-        <div class="prod-bars">${accountBarsHtml}</div>
+        <div class="prod-bars-scroll"><div class="prod-bars">${accountBarsHtml}</div></div>
       </div>
     </div>`;
 }
@@ -2408,7 +2478,9 @@ function renderOverviewMain() {
 // Renders the priority-grouped-or-flat-sorted task list (plus its own Done
 // section) for one scope of tasks — either a whole non-payment desk, or one
 // payType section (Loans / Payables) within the Repayment Dashboard.
-function renderTaskListSections(scopeTasks, sortMode) {
+// scopeKey namespaces the collapse state so a Payables P1 group and a Loans
+// P1 group collapse independently.
+function renderTaskListSections(scopeTasks, sortMode, scopeKey) {
   const open = scopeTasks.filter(t => !t.done);
   const done = scopeTasks.filter(t => t.done)
     .sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || ''));
@@ -2417,29 +2489,23 @@ function renderTaskListSections(scopeTasks, sortMode) {
   let anySections = false;
   if (sortMode === 'priority') {
     const sections = [
-      { label: PRIORITY_LABELS.p1, tasks: open.filter(t => effectivePriority(t) === 'p1') },
-      { label: PRIORITY_LABELS.p2, tasks: open.filter(t => effectivePriority(t) === 'p2') },
-      { label: PRIORITY_LABELS.p3, tasks: open.filter(t => effectivePriority(t) === 'p3') },
-      { label: PRIORITY_LABELS.p4, tasks: open.filter(t => effectivePriority(t) === 'p4') },
+      { key: 'p1', label: PRIORITY_LABELS.p1, tasks: open.filter(t => effectivePriority(t) === 'p1') },
+      { key: 'p2', label: PRIORITY_LABELS.p2, tasks: open.filter(t => effectivePriority(t) === 'p2') },
+      { key: 'p3', label: PRIORITY_LABELS.p3, tasks: open.filter(t => effectivePriority(t) === 'p3') },
+      { key: 'p4', label: PRIORITY_LABELS.p4, tasks: open.filter(t => effectivePriority(t) === 'p4') },
     ];
     sections.forEach(s => {
       if (s.tasks.length === 0) return;
       anySections = true;
-      html += `
-        <div class="section-divider">
-          <span class="section-divider-label">${s.label}</span>
-          <div class="section-divider-line"></div>
-        </div>`;
-      s.tasks.forEach(t => { html += taskCardHTML(t); });
+      const key = `${scopeKey}|${s.key}`;
+      html += sectionDividerHTML(key, s.label);
+      if (!collapsedSections[key]) s.tasks.forEach(t => { html += taskCardHTML(t); });
     });
   } else if (open.length > 0) {
     anySections = true;
-    html += `
-      <div class="section-divider">
-        <span class="section-divider-label">Sorted by ${SORT_LABELS[sortMode]}</span>
-        <div class="section-divider-line"></div>
-      </div>`;
-    sortTasksBy(open, sortMode).forEach(t => { html += taskCardHTML(t); });
+    const key = `${scopeKey}|sorted`;
+    html += sectionDividerHTML(key, `Sorted by ${SORT_LABELS[sortMode]}`);
+    if (!collapsedSections[key]) sortTasksBy(open, sortMode).forEach(t => { html += taskCardHTML(t); });
   }
 
   if (done.length > 0) {
@@ -2468,16 +2534,14 @@ function renderTaskListSections(scopeTasks, sortMode) {
 }
 
 // One payType section (Loans or Payables) within the Repayment Dashboard —
-// its own heading, its own summary chart, its own task list.
+// its own collapsible heading and task list. The summary chart now renders
+// above both divisions instead of inline (see renderDeskMain).
 function renderPayDivision(deskId, type, label, sortMode) {
-  const summary = renderRepaymentSummary(deskId, type);
-  return `
-    <div class="section-divider" style="margin-top:14px">
-      <span class="section-divider-label" style="font-size:13px;font-weight:700">${label}</span>
-      <div class="section-divider-line"></div>
-    </div>
-    ${summary}
-    ${renderTaskListSections(tasksForPayType(deskId, type), sortMode)}`;
+  const key = `${deskId}|division|${type}`;
+  const collapsed = !!collapsedSections[key];
+  let html = sectionDividerHTML(key, label, true);
+  if (!collapsed) html += renderTaskListSections(tasksForPayType(deskId, type), sortMode, `${deskId}|${type}`);
+  return html;
 }
 
 function renderDeskMain() {
@@ -2523,6 +2587,18 @@ function renderDeskMain() {
       <button class="btn btn-primary" onclick="event.stopPropagation(); addTask('${activeView}')">＋ Add</button>
     </div>
     ${isPay ? `<datalist id="account-datalist">${accountKnownNames(activeView).map(n => `<option value="${escHtml(n)}"></option>`).join('')}</datalist>` : ''}
+    ${isPay ? `
+      <div class="section-divider" style="margin-top:14px">
+        <span class="section-divider-label" style="font-size:12px;font-weight:700">🧾 Payables summary</span>
+        <div class="section-divider-line"></div>
+      </div>
+      ${renderRepaymentSummary(activeView, 'payable')}
+      <div class="section-divider" style="margin-top:14px">
+        <span class="section-divider-label" style="font-size:12px;font-weight:700">🏦 Loans summary</span>
+        <div class="section-divider-line"></div>
+      </div>
+      ${renderRepaymentSummary(activeView, 'loan')}
+    ` : ''}
 
     <div class="tasks-list" id="tasks-list">`;
 
@@ -2530,7 +2606,7 @@ function renderDeskMain() {
     html += renderPayDivision(activeView, 'payable', '🧾 Payables', sortMode);
     html += renderPayDivision(activeView, 'loan', '🏦 Loans', sortMode);
   } else {
-    html += renderTaskListSections(tasks, sortMode);
+    html += renderTaskListSections(tasks, sortMode, activeView);
   }
 
   html += `</div>`;
