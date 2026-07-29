@@ -2254,6 +2254,70 @@ function repaymentPeriodStats(deskId, type) {
   return { dueThisWeek, dueThisMonth };
 }
 
+// Categorical palette for the vendor/lender share pie — validated (adjacent
+// CVD + normal-vision floor) against a white card surface, six hues plus a
+// neutral gray for the "Other" bucket. See dataviz skill palette.md.
+const PIE_COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300'];
+const PIE_OTHER_COLOR = 'var(--muted)';
+
+// Caps individual slices at 6 (the validated palette length) and folds
+// anything past that into a single "Other" slice — a pie with 15 vendor
+// slivers is unreadable regardless of color, so the tail gets grouped
+// rather than assigned a 7th/8th generated hue.
+function pieSlicesFromAccounts(accounts) {
+  const ranked = accounts
+    .map(a => ({ label: a.account, value: a.paid + a.outstanding }))
+    .filter(s => s.value > 0)
+    .sort((a, b) => b.value - a.value);
+  const top = ranked.slice(0, PIE_COLORS.length).map((s, i) => ({ ...s, color: PIE_COLORS[i] }));
+  const rest = ranked.slice(PIE_COLORS.length);
+  const restTotal = rest.reduce((s, x) => s + x.value, 0);
+  if (restTotal > 0) top.push({ label: `Other (${rest.length})`, value: restTotal, color: PIE_OTHER_COLOR });
+  return top;
+}
+
+function polarToXY(cx, cy, r, angleDeg) {
+  const rad = (angleDeg * Math.PI) / 180;
+  return [cx + r * Math.cos(rad), cy + r * Math.sin(rad)];
+}
+
+// Hand-rolled SVG pie (no charting library in this app) — each slice is a
+// wedge path with a native <title> for hover tooltips, satisfying the
+// per-mark hover requirement without any JS event wiring.
+function svgPieChart(slices) {
+  const total = slices.reduce((s, x) => s + x.value, 0);
+  if (!total) return '';
+  const cx = 60, cy = 60, r = 56;
+  let angle = -90;
+  const wedges = slices.map(s => {
+    const frac = s.value / total;
+    const pct = Math.round(frac * 100);
+    const tooltip = `${escHtml(s.label)} — ${fmtCost(s.value)} (${pct}%)`;
+    if (frac >= 0.999) {
+      return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${s.color}"><title>${tooltip}</title></circle>`;
+    }
+    const startAngle = angle;
+    const endAngle = angle + frac * 360;
+    angle = endAngle;
+    const [x1, y1] = polarToXY(cx, cy, r, startAngle);
+    const [x2, y2] = polarToXY(cx, cy, r, endAngle);
+    const large = (endAngle - startAngle) > 180 ? 1 : 0;
+    return `<path d="M${cx},${cy} L${x1},${y1} A${r},${r} 0 ${large} 1 ${x2},${y2} Z" fill="${s.color}" stroke="var(--surface)" stroke-width="1.5"><title>${tooltip}</title></path>`;
+  }).join('');
+  return `<svg viewBox="0 0 120 120" width="120" height="120" style="flex-shrink:0">${wedges}</svg>`;
+}
+
+// Legend doubles as the secondary encoding the palette's contrast WARN
+// requires — every slice's amount/share is spelled out in text, not
+// color-only.
+function pieLegendHTML(slices) {
+  const total = slices.reduce((s, x) => s + x.value, 0);
+  return `<div class="prod-legend" style="flex-direction:column;gap:6px">${slices.map(s => {
+    const pct = total ? Math.round((s.value / total) * 100) : 0;
+    return `<span class="prod-legend-item"><span class="prod-legend-swatch" style="background:${s.color}"></span>${escHtml(s.label)} — ${fmtCost(s.value)} (${pct}%)</span>`;
+  }).join('')}</div>`;
+}
+
 // Rendered once per payType section (Loans, Payables) within the Repayment
 // Dashboard — each gets its own paid-vs-outstanding picture instead of one
 // combined chart, since a loan balance and a vendor payable roll up very
@@ -2267,6 +2331,8 @@ function renderRepaymentSummary(deskId, type) {
 
   const pct = Math.round((totalPaid / grandTotal) * 100);
   const byLabel = type === 'loan' ? 'By lender — paid vs owed' : 'By vendor — paid vs owed';
+  const shareLabel = type === 'loan' ? 'Share of total — by lender' : 'Share of total — by vendor';
+  const pieSlices = pieSlicesFromAccounts(accounts);
   const period = repaymentPeriodStats(deskId, type);
 
   const accountBarsHtml = accounts.map(a => {
@@ -2303,6 +2369,13 @@ function renderRepaymentSummary(deskId, type) {
         <div class="prod-legend">
           <span class="prod-legend-item"><span class="prod-legend-swatch prod-legend-swatch-paid"></span>Paid — ${fmtCost(totalPaid)}</span>
           <span class="prod-legend-item"><span class="prod-legend-swatch prod-legend-swatch-outstanding"></span>Outstanding — ${fmtCost(totalOutstanding)}</span>
+        </div>
+      </div>
+      <div class="prod-card prod-card-wide">
+        <div class="prod-card-title">${shareLabel}</div>
+        <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap">
+          ${svgPieChart(pieSlices)}
+          ${pieLegendHTML(pieSlices)}
         </div>
       </div>
       <div class="prod-card prod-card-wide">
