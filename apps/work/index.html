@@ -1352,14 +1352,13 @@ body {
 const DESKS = [
   { id:'email', num:'01', name:'Email, investors & loans', sub:'Correspondence, relations, follow-ups', icon:'📬', ic_bg:'#E6F1FB', ic_color:'#185FA5' },
   { id:'fin',   num:'02', name:'Financial',                sub:'Branch P&L, collections, variances',    icon:'📊', ic_bg:'#E1F5EE', ic_color:'#0F6E56' },
-  { id:'loans', num:'03', name:'Loan Repayments',          sub:'Loan schedules, amounts owed, due dates', icon:'🏦', ic_bg:'#E9F0FB', ic_color:'#1D4E93' },
-  { id:'pay',   num:'04', name:'Payables',                 sub:'Vendor & operational payment schedule, amounts owed, due dates', icon:'🧾', ic_bg:'#FAECE7', ic_color:'#993C1D' },
-  { id:'paytasks', num:'05', name:'Payables Tasks',        sub:'Follow-ups, negotiations, and admin tied to payables & loans', icon:'📌', ic_bg:'#FBEEE5', ic_color:'#A6491D' },
-  { id:'mkt',   num:'06', name:'Marketing',                sub:'Approvals, designer briefs, calendar',  icon:'📣', ic_bg:'#EEEDFE', ic_color:'#534AB7' },
-  { id:'ops',   num:'07', name:'Operational',              sub:'Staff, supplies, quality, branch issues',icon:'⚙️', ic_bg:'#FBEAF0', ic_color:'#993556' },
-  { id:'dev',   num:'08', name:'Business Development',     sub:'New branches, site selection, contractor coordination', icon:'🏗️', ic_bg:'#FAEEDA', ic_color:'#854F0B' },
-  { id:'report',num:'09', name:'Company review',           sub:'Snapshots, partner updates, scorecard', icon:'📋', ic_bg:'#EAF3DE', ic_color:'#3B6D11' },
-  { id:'legal', num:'10', name:'Legal and Administrative', sub:'Permits, registrations, SEC/FDA & compliance filings', icon:'⚖️', ic_bg:'#ECEDF2', ic_color:'#37415C' },
+  { id:'pay',   num:'03', name:'Repayment Dashboard',      sub:'Loan & payables schedule, amounts owed, due dates', icon:'🧾', ic_bg:'#FAECE7', ic_color:'#993C1D' },
+  { id:'paytasks', num:'04', name:'Payables Tasks',        sub:'Follow-ups, negotiations, and admin tied to payables & loans', icon:'📌', ic_bg:'#FBEEE5', ic_color:'#A6491D' },
+  { id:'mkt',   num:'05', name:'Marketing',                sub:'Approvals, designer briefs, calendar',  icon:'📣', ic_bg:'#EEEDFE', ic_color:'#534AB7' },
+  { id:'ops',   num:'06', name:'Operational',              sub:'Staff, supplies, quality, branch issues',icon:'⚙️', ic_bg:'#FBEAF0', ic_color:'#993556' },
+  { id:'dev',   num:'07', name:'Business Development',     sub:'New branches, site selection, contractor coordination', icon:'🏗️', ic_bg:'#FAEEDA', ic_color:'#854F0B' },
+  { id:'report',num:'08', name:'Company review',           sub:'Snapshots, partner updates, scorecard', icon:'📋', ic_bg:'#EAF3DE', ic_color:'#3B6D11' },
+  { id:'legal', num:'09', name:'Legal and Administrative', sub:'Permits, registrations, SEC/FDA & compliance filings', icon:'⚖️', ic_bg:'#ECEDF2', ic_color:'#37415C' },
 ];
 
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -1373,12 +1372,13 @@ function priorityOptionsHtml(current) {
 }
 
 // A task's kind ('task' vs 'payment') is now implied entirely by which desk
-// it lives on — the two payment desks (Loans, Payables) hold kind:'payment'
-// entries, everything else (including Payables Tasks) holds kind:'task' —
-// see defaultKindForDesk — but the field itself is kept so the calendar
-// panel, cost display, etc. don't need to special-case which desk they're
-// looking at.
-const PAYMENT_DESKS = ['loans', 'pay'];
+// it lives on — the Repayment Dashboard holds kind:'payment' entries,
+// everything else (including Payables Tasks) holds kind:'task' — see
+// defaultKindForDesk — but the field itself is kept so the calendar panel,
+// cost display, etc. don't need to special-case which desk they're looking
+// at. Within the Repayment Dashboard, payType ('loan' vs 'payable') divides
+// entries into two sections without needing two separate desks.
+const PAYMENT_DESKS = ['pay'];
 function isPaymentDesk(deskId) {
   return PAYMENT_DESKS.includes(deskId);
 }
@@ -1408,13 +1408,11 @@ const DEFAULT_TASKS = {
     { id:'fin4', title:'QDMS-SP: June P&L reviewed and filed', meta:'Completed Monday · No action needed', priority:'p4', done:true, notes:'' },
     { id:'fin5', title:'Branch 4 & 5 pre-opening cost tracker', meta:'Monitor only · Capex at 67% of budget', priority:'p4', done:false, notes:'' },
   ],
-  loans: [
-    { id:'loan1', title:'Monthly partner debt repayment — P700,000', meta:'Due Friday · Confirm cash position before releasing', priority:'p2', done:false, notes:'', kind:'payment', cost:700000, account:'Partner loan' },
-  ],
   pay: [
-    { id:'pay1', title:'Supplier invoice #2024-441 — P38,500 · 5 days overdue', meta:'Reagent supplier · Pay today to avoid supply disruption', priority:'p1', done:false, notes:'', kind:'payment', cost:38500 },
-    { id:'pay3', title:'QDMS-SP rent — P74,320 · Due end of week', meta:'Auto-schedule from operations account', priority:'p2', done:false, notes:'', kind:'payment', cost:74320 },
-    { id:'pay4', title:'Professional fees (3 branches) — P27,002 total', meta:'Bundle and pay in one transfer on Thursday', priority:'p2', done:false, notes:'', kind:'payment', cost:27002 },
+    { id:'pay1', title:'Supplier invoice #2024-441 — P38,500 · 5 days overdue', meta:'Reagent supplier · Pay today to avoid supply disruption', priority:'p1', done:false, notes:'', kind:'payment', cost:38500, payType:'payable' },
+    { id:'loan1', title:'Monthly partner debt repayment — P700,000', meta:'Due Friday · Confirm cash position before releasing', priority:'p2', done:false, notes:'', kind:'payment', cost:700000, account:'Partner loan', payType:'loan' },
+    { id:'pay3', title:'QDMS-SP rent — P74,320 · Due end of week', meta:'Auto-schedule from operations account', priority:'p2', done:false, notes:'', kind:'payment', cost:74320, payType:'payable' },
+    { id:'pay4', title:'Professional fees (3 branches) — P27,002 total', meta:'Bundle and pay in one transfer on Thursday', priority:'p2', done:false, notes:'', kind:'payment', cost:27002, payType:'payable' },
   ],
   paytasks: [
     { id:'paytask1', title:'Review full payables queue — P8.4M in pipeline', meta:'Priority: payroll > suppliers > rent > other · Block 30 min Wednesday', priority:'p3', done:false, notes:'' },
@@ -1476,6 +1474,10 @@ function normalizeTask(t) {
   // require rewriting every installment's title text. Falls back to title
   // for entries created before this field existed (see repaymentByAccount).
   if (t.account === undefined) t.account = '';
+  // Divides the Repayment Dashboard into Loans and Payables sections without
+  // needing two separate desks. Defaults to 'payable' since that's the more
+  // common case and matches how the desk behaved before payType existed.
+  if (t.payType === undefined) t.payType = 'payable';
   // Legacy tasks (saved before this field existed) default to today rather
   // than an unknown past date, so they don't immediately show as stale.
   if (t.createdAt === undefined) t.createdAt = fmtDate(new Date());
@@ -1519,23 +1521,18 @@ function migratePayablesSplit(parsed) {
   parsed.desks.paytasks = moved;
 }
 
-// One-time migration: the Repayment Dashboard (desk 'pay') used to hold both
-// loan repayments and ordinary vendor/operational payables together. Split
-// it into a dedicated "Loan Repayments" desk and a "Payables" desk (still id
-// 'pay'), using a keyword match against the title/notes to guess which
-// existing entries are loans. Runs once — a browser that already has a
-// loans desk (even an empty one) is left alone; anything the keyword match
-// misses can be corrected afterward with the per-task move button.
-function migrateLoansSplit(parsed) {
-  if (!parsed.desks.pay || parsed.desks.loans) return;
-  const LOAN_RE = /\bloan\b|\bdebt\b|\bborrow/i;
-  const moved = [];
-  parsed.desks.pay = parsed.desks.pay.filter(t => {
-    const text = `${t.title || ''} ${t.meta || ''} ${t.notes || ''}`;
-    if (LOAN_RE.test(text)) { moved.push(t); return false; }
-    return true;
-  });
-  parsed.desks.loans = moved;
+// One-time migration: reverses the short-lived Loans/Payables desk split —
+// folds state.desks.loans back into state.desks.pay, tagging each task with
+// payType ('loan' or 'payable') so the two stay visually divided within the
+// single Repayment Dashboard desk instead of living on two separate desks.
+// Runs once — a browser that never had a loans desk (or already merged) is
+// left alone.
+function migrateLoansMerge(parsed) {
+  if (!parsed.desks.loans) return;
+  parsed.desks.pay = parsed.desks.pay || [];
+  parsed.desks.pay.forEach(t => { if (!t.payType) t.payType = 'payable'; });
+  parsed.desks.loans.forEach(t => { t.payType = 'loan'; parsed.desks.pay.push(t); });
+  delete parsed.desks.loans;
 }
 
 function loadState() {
@@ -1546,7 +1543,7 @@ function loadState() {
       if (!parsed.desks) parsed.desks = {};
       migrateLegalDesk(parsed);
       migratePayablesSplit(parsed);
-      migrateLoansSplit(parsed);
+      migrateLoansMerge(parsed);
       DESKS.forEach(d => {
         if (!parsed.desks[d.id]) parsed.desks[d.id] = JSON.parse(JSON.stringify(DEFAULT_TASKS[d.id] || []));
       });
@@ -2165,17 +2162,24 @@ function payablesRollup() {
   return { total, overdue, dueThisWeek, count: open.length };
 }
 
-// Groups Repayment Dashboard entries by their account (person/company).
-// Entries saved before the account field existed fall back to their title,
-// which is what the grouping used before — so old data keeps grouping the
-// same way it always did until you go back and assign it a real account.
-function accountKnownNames(deskId) {
+// Splits the Repayment Dashboard's own task list by payType — the same
+// desk, divided into a Loans section and a Payables section, instead of two
+// separate desks.
+function tasksForPayType(deskId, type) {
+  return (state.desks[deskId] || []).filter(t => (t.payType === 'loan') === (type === 'loan'));
+}
+
+// Groups a Repayment Dashboard section (loans or payables) by account
+// (person/company). Entries saved before the account field existed fall
+// back to their title, which is what the grouping used before — so old data
+// keeps grouping the same way it always did until you assign a real account.
+function accountKnownNames(deskId, type) {
   const names = new Set();
-  (state.desks[deskId] || []).forEach(t => { if (t.account) names.add(t.account); });
+  tasksForPayType(deskId, type).forEach(t => { if (t.account) names.add(t.account); });
   return [...names].sort();
 }
-function repaymentByAccount(deskId) {
-  const items = (state.desks[deskId] || []).filter(t => typeof t.cost === 'number' && t.cost > 0);
+function repaymentByAccount(deskId, type) {
+  const items = tasksForPayType(deskId, type).filter(t => typeof t.cost === 'number' && t.cost > 0);
   const groups = {};
   items.forEach(t => {
     const key = t.account || t.title;
@@ -2186,20 +2190,19 @@ function repaymentByAccount(deskId) {
   return Object.values(groups).sort((a, b) => (b.paid + b.outstanding) - (a.paid + a.outstanding));
 }
 
-// Rendered on both payment desks (Loans, Payables), scoped to whichever one
-// is active — each desk gets its own paid-vs-outstanding picture instead of
-// one combined chart, since a loan balance and a vendor payable roll up very
-// differently.
-function renderRepaymentSummary(deskId) {
-  const desk = DESKS.find(d => d.id === deskId);
-  const accounts = repaymentByAccount(deskId);
+// Rendered once per payType section (Loans, Payables) within the Repayment
+// Dashboard — each gets its own paid-vs-outstanding picture instead of one
+// combined chart, since a loan balance and a vendor payable roll up very
+// differently. Returns '' when that section has nothing to chart yet.
+function renderRepaymentSummary(deskId, type) {
+  const accounts = repaymentByAccount(deskId, type);
   const totalPaid = accounts.reduce((s, a) => s + a.paid, 0);
   const totalOutstanding = accounts.reduce((s, a) => s + a.outstanding, 0);
   const grandTotal = totalPaid + totalOutstanding;
   if (!grandTotal) return '';
 
   const pct = Math.round((totalPaid / grandTotal) * 100);
-  const byLabel = deskId === 'loans' ? 'By lender — paid vs owed' : 'By vendor — paid vs owed';
+  const byLabel = type === 'loan' ? 'By lender — paid vs owed' : 'By vendor — paid vs owed';
 
   const accountBarsHtml = accounts.map(a => `
     <div class="prod-bar-row">
@@ -2212,10 +2215,6 @@ function renderRepaymentSummary(deskId) {
     </div>`).join('');
 
   return `
-    <div class="section-divider">
-      <span class="section-divider-label">${desk.name} summary</span>
-      <div class="section-divider-line"></div>
-    </div>
     <div class="prod-grid">
       <div class="prod-card">
         <div class="prod-card-title">Paid vs outstanding</div>
@@ -2337,10 +2336,7 @@ function renderOverviewMain() {
         <div><div style="font-size:10px;color:var(--muted)">Total outstanding</div><div style="font-size:16px;font-weight:700">${fmtCost(rollup.total)}</div></div>
         ${rollup.overdue > 0 ? `<div><div style="font-size:10px;color:var(--muted)">Overdue</div><div style="font-size:16px;font-weight:700;color:var(--p1-color)">${fmtCost(rollup.overdue)}</div></div>` : ''}
         <div><div style="font-size:10px;color:var(--muted)">Due within 7 days</div><div style="font-size:16px;font-weight:700">${fmtCost(rollup.dueThisWeek)}</div></div>
-        <div style="margin-left:auto;display:flex;gap:8px">
-          <button class="btn" style="font-size:11px;padding:4px 8px" onclick="switchView('loans')">Loans →</button>
-          <button class="btn" style="font-size:11px;padding:4px 8px" onclick="switchView('pay')">Payables →</button>
-        </div>
+        <button class="btn" style="margin-left:auto;font-size:11px;padding:4px 8px" onclick="switchView('pay')">View →</button>
       </div>`;
   }
 
@@ -2409,66 +2405,22 @@ function renderOverviewMain() {
 
 // ── DESK MAIN ──────────────────────────────────────────────────────────────────
 
-function renderDeskMain() {
-  const desk = DESKS.find(d => d.id === activeView);
-  const tasks = state.desks[activeView] || [];
-  const open = tasks.filter(t => !t.done);
-  const done = tasks.filter(t => t.done)
+// Renders the priority-grouped-or-flat-sorted task list (plus its own Done
+// section) for one scope of tasks — either a whole non-payment desk, or one
+// payType section (Loans / Payables) within the Repayment Dashboard.
+function renderTaskListSections(scopeTasks, sortMode) {
+  const open = scopeTasks.filter(t => !t.done);
+  const done = scopeTasks.filter(t => t.done)
     .sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || ''));
 
-  const isPay = isPaymentDesk(activeView);
-  const sortMode = deskSortMode[activeView] || 'priority';
-  const sortOptions = isPay ? SORT_OPTIONS_PAY : SORT_OPTIONS;
-
-  const openByP = {
-    p1: open.filter(t => effectivePriority(t) === 'p1'),
-    p2: open.filter(t => effectivePriority(t) === 'p2'),
-    p3: open.filter(t => effectivePriority(t) === 'p3'),
-    p4: open.filter(t => effectivePriority(t) === 'p4'),
-  };
-
-  let html = `
-    <div class="desk-header">
-      <div class="desk-title-area">
-        <div class="desk-title">${desk.icon} ${desk.name}</div>
-        <div class="desk-desc">${desk.sub}</div>
-      </div>
-      <div class="desk-actions">
-        <select class="add-priority-select" onchange="setDeskSort('${activeView}', this.value)" title="Sort tasks">
-          ${sortOptions.map(o => `<option value="${o.key}" ${sortMode === o.key ? 'selected' : ''}>Sort: ${o.label}</option>`).join('')}
-        </select>
-        <button class="btn" onclick="openBulkAddModal('${activeView}')">＋ Bulk add</button>
-        ${done.length > 0 ? `<button class="btn btn-danger" onclick="clearDone()">Clear ${done.length} done</button>` : ''}
-        <button class="btn" onclick="resetDesk()">Reset desk</button>
-      </div>
-    </div>
-
-    <div class="add-task-area" onclick="document.getElementById('add-input-${activeView}').focus()">
-      <div class="add-icon">+</div>
-      <input class="add-input" id="add-input-${activeView}" placeholder="Add a task… press Enter to save" style="flex:2"
-        onkeydown="handleAddKey(event, '${activeView}')">
-      <input class="add-input" id="add-link-${activeView}" type="url" placeholder="Link (optional)" style="flex:1"
-        onclick="event.stopPropagation()" onkeydown="handleAddKey(event, '${activeView}')">
-      ${isPay ? `<input class="add-input" id="add-cost-${activeView}" type="number" min="0" step="0.01" placeholder="Amount (₱)" style="flex:0 0 130px"
-        onclick="event.stopPropagation()" onkeydown="handleAddKey(event, '${activeView}')">` : ''}
-      ${isPay ? `<input class="add-input" id="add-account-${activeView}" list="account-datalist" placeholder="Person/company" style="flex:0 0 150px"
-        onclick="event.stopPropagation()" onkeydown="handleAddKey(event, '${activeView}')">` : ''}
-      <select class="add-priority-select" id="add-priority-${activeView}" onclick="event.stopPropagation()">${priorityOptionsHtml('p2')}</select>
-      <button class="btn btn-primary" onclick="event.stopPropagation(); addTask('${activeView}')">＋ Add</button>
-    </div>
-    ${isPay ? `<datalist id="account-datalist">${accountKnownNames(activeView).map(n => `<option value="${escHtml(n)}"></option>`).join('')}</datalist>` : ''}
-
-    ${isPay ? renderRepaymentSummary(activeView) : ''}
-
-    <div class="tasks-list" id="tasks-list">`;
-
+  let html = '';
   let anySections = false;
   if (sortMode === 'priority') {
     const sections = [
-      { key:'p1', label: PRIORITY_LABELS.p1, tasks: openByP.p1 },
-      { key:'p2', label: PRIORITY_LABELS.p2, tasks: openByP.p2 },
-      { key:'p3', label: PRIORITY_LABELS.p3, tasks: openByP.p3 },
-      { key:'p4', label: PRIORITY_LABELS.p4, tasks: openByP.p4 },
+      { label: PRIORITY_LABELS.p1, tasks: open.filter(t => effectivePriority(t) === 'p1') },
+      { label: PRIORITY_LABELS.p2, tasks: open.filter(t => effectivePriority(t) === 'p2') },
+      { label: PRIORITY_LABELS.p3, tasks: open.filter(t => effectivePriority(t) === 'p3') },
+      { label: PRIORITY_LABELS.p4, tasks: open.filter(t => effectivePriority(t) === 'p4') },
     ];
     sections.forEach(s => {
       if (s.tasks.length === 0) return;
@@ -2512,6 +2464,74 @@ function renderDeskMain() {
         <div class="empty-text">All clear — add items above as they come in.</div>
       </div>`;
   }
+  return html;
+}
+
+// One payType section (Loans or Payables) within the Repayment Dashboard —
+// its own heading, its own summary chart, its own task list.
+function renderPayDivision(deskId, type, label, sortMode) {
+  const summary = renderRepaymentSummary(deskId, type);
+  return `
+    <div class="section-divider" style="margin-top:14px">
+      <span class="section-divider-label" style="font-size:13px;font-weight:700">${label}</span>
+      <div class="section-divider-line"></div>
+    </div>
+    ${summary}
+    ${renderTaskListSections(tasksForPayType(deskId, type), sortMode)}`;
+}
+
+function renderDeskMain() {
+  const desk = DESKS.find(d => d.id === activeView);
+  const tasks = state.desks[activeView] || [];
+  const done = tasks.filter(t => t.done);
+
+  const isPay = isPaymentDesk(activeView);
+  const sortMode = deskSortMode[activeView] || 'priority';
+  const sortOptions = isPay ? SORT_OPTIONS_PAY : SORT_OPTIONS;
+
+  let html = `
+    <div class="desk-header">
+      <div class="desk-title-area">
+        <div class="desk-title">${desk.icon} ${desk.name}</div>
+        <div class="desk-desc">${desk.sub}</div>
+      </div>
+      <div class="desk-actions">
+        <select class="add-priority-select" onchange="setDeskSort('${activeView}', this.value)" title="Sort tasks">
+          ${sortOptions.map(o => `<option value="${o.key}" ${sortMode === o.key ? 'selected' : ''}>Sort: ${o.label}</option>`).join('')}
+        </select>
+        <button class="btn" onclick="openBulkAddModal('${activeView}')">＋ Bulk add</button>
+        ${done.length > 0 ? `<button class="btn btn-danger" onclick="clearDone()">Clear ${done.length} done</button>` : ''}
+        <button class="btn" onclick="resetDesk()">Reset desk</button>
+      </div>
+    </div>
+
+    <div class="add-task-area" onclick="document.getElementById('add-input-${activeView}').focus()">
+      <div class="add-icon">+</div>
+      <input class="add-input" id="add-input-${activeView}" placeholder="Add a task… press Enter to save" style="flex:2"
+        onkeydown="handleAddKey(event, '${activeView}')">
+      <input class="add-input" id="add-link-${activeView}" type="url" placeholder="Link (optional)" style="flex:1"
+        onclick="event.stopPropagation()" onkeydown="handleAddKey(event, '${activeView}')">
+      ${isPay ? `<input class="add-input" id="add-cost-${activeView}" type="number" min="0" step="0.01" placeholder="Amount (₱)" style="flex:0 0 130px"
+        onclick="event.stopPropagation()" onkeydown="handleAddKey(event, '${activeView}')">` : ''}
+      ${isPay ? `<input class="add-input" id="add-account-${activeView}" list="account-datalist" placeholder="Person/company" style="flex:0 0 150px"
+        onclick="event.stopPropagation()" onkeydown="handleAddKey(event, '${activeView}')">` : ''}
+      ${isPay ? `<select class="add-priority-select" id="add-paytype-${activeView}" onclick="event.stopPropagation()">
+        <option value="payable">Payable</option>
+        <option value="loan">Loan</option>
+      </select>` : ''}
+      <select class="add-priority-select" id="add-priority-${activeView}" onclick="event.stopPropagation()">${priorityOptionsHtml('p2')}</select>
+      <button class="btn btn-primary" onclick="event.stopPropagation(); addTask('${activeView}')">＋ Add</button>
+    </div>
+    ${isPay ? `<datalist id="account-datalist">${accountKnownNames(activeView).map(n => `<option value="${escHtml(n)}"></option>`).join('')}</datalist>` : ''}
+
+    <div class="tasks-list" id="tasks-list">`;
+
+  if (isPay) {
+    html += renderPayDivision(activeView, 'payable', '🧾 Payables', sortMode);
+    html += renderPayDivision(activeView, 'loan', '🏦 Loans', sortMode);
+  } else {
+    html += renderTaskListSections(tasks, sortMode);
+  }
 
   html += `</div>`;
 
@@ -2548,9 +2568,12 @@ function taskCardHTML(t) {
           <button class="status-btn ${t.status}" onclick="cycleStatus('${t.id}')" title="Click to change status">${STATUS_LABELS[t.status]}</button>
           ${isPaymentDesk(activeView) ? `<input type="number" class="date-input" style="width:100px" min="0" step="0.01" placeholder="Amount ₱" value="${t.cost !== null && t.cost !== undefined ? t.cost : ''}" onchange="updateTaskCost('${t.id}', this.value)" title="Total amount for this payment">` : ''}
           ${isPaymentDesk(activeView) ? `<input type="text" class="date-input" style="width:130px" list="account-datalist" placeholder="Person/company" value="${escHtml(t.account || '')}" onchange="updateTaskAccount('${t.id}', this.value)" title="Who this payment is owed to">` : ''}
+          ${isPaymentDesk(activeView) ? `<select class="priority-btn priority-select" onchange="updateTaskPayType('${t.id}', this.value)" title="Loan or payable?">
+            <option value="payable" ${t.payType !== 'loan' ? 'selected' : ''}>Payable</option>
+            <option value="loan" ${t.payType === 'loan' ? 'selected' : ''}>Loan</option>
+          </select>` : ''}
           <select class="priority-btn priority-select ${effectivePriority(t)}" ${effectivePriority(t) !== t.priority ? 'title="Past due date — showing as Overdue"' : ''} onchange="updateTaskPriority('${t.id}', this.value)">${priorityOptionsHtml(effectivePriority(t))}</select>
           <input type="date" class="date-input" value="${t.date || ''}" onchange="updateTaskDate('${t.id}', this.value)" title="Due date">
-          ${isPaymentDesk(activeView) ? `<button class="delete-btn" onclick="moveToOtherPaymentDesk('${t.id}')" title="Move to ${activeView === 'pay' ? 'Loan Repayments' : 'Payables'}">⇄</button>` : ''}
           <button class="delete-btn" onclick="duplicateTask('${t.id}')" title="Duplicate task">⧉</button>
           <button class="delete-btn" onclick="deleteTask('${t.id}')" title="Delete task">✕</button>
         </div>
@@ -3681,26 +3704,22 @@ function deleteTask(id) {
   }
 }
 
-// Copies title/meta/priority/link but not the date — the copy lands in
-// "Unscheduled tasks" so it can be dragged onto whichever day it's needed,
-// which is the point for placing a routine/recurring task on a specific day
-// without retyping it each time.
 // Corrects a Loans/Payables migration miss, or just lets a task be
-// re-classified after the fact — moves it between the two payment desks
-// without touching anything else about it (cost, account, dates, etc).
-function moveToOtherPaymentDesk(id) {
-  const from = activeView;
-  const to = from === 'pay' ? 'loans' : 'pay';
-  if (!isPaymentDesk(from)) return;
-  const idx = (state.desks[from] || []).findIndex(t => t.id === id);
-  if (idx === -1) return;
-  const [t] = state.desks[from].splice(idx, 1);
-  if (!state.desks[to]) state.desks[to] = [];
-  state.desks[to].unshift(t);
+// re-classified after the fact — moves it between the Loans and Payables
+// sections of the Repayment Dashboard without touching anything else about
+// it (cost, account, dates, etc).
+function updateTaskPayType(id, val) {
+  const t = findTask(id);
+  if (!t) return;
+  t.payType = val === 'loan' ? 'loan' : 'payable';
   saveState();
   renderAll();
 }
 
+// Copies title/meta/priority/link but not the date — the copy lands in
+// "Unscheduled tasks" so it can be dragged onto whichever day it's needed,
+// which is the point for placing a routine/recurring task on a specific day
+// without retyping it each time.
 function duplicateTask(id) {
   for (const d of DESKS) {
     const list = state.desks[d.id] || [];
@@ -3769,6 +3788,7 @@ function addTask(deskId) {
   const priSel = document.getElementById('add-priority-' + deskId);
   const costInput = document.getElementById('add-cost-' + deskId);
   const accountInput = document.getElementById('add-account-' + deskId);
+  const payTypeSel = document.getElementById('add-paytype-' + deskId);
   const title = input.value.trim();
   if (!title) { input.focus(); return; }
   const costVal = costInput ? parseFloat(costInput.value) : NaN;
@@ -3785,6 +3805,7 @@ function addTask(deskId) {
     kind: defaultKindForDesk(deskId),
     cost: isNaN(costVal) ? null : costVal,
     account: accountInput ? accountInput.value.trim() : '',
+    payType: payTypeSel ? payTypeSel.value : 'payable',
   });
   if (!state.desks[deskId]) state.desks[deskId] = [];
   state.desks[deskId].unshift(newTask);
@@ -3814,6 +3835,15 @@ function openBulkAddModal(deskId) {
           <button class="delete-btn" style="opacity:1" onclick="closeModal()">✕</button>
         </div>
         <div style="padding:14px 18px 18px;display:flex;flex-direction:column;gap:18px">
+
+          ${isPay ? `<div>
+            <div style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:4px">Type</div>
+            <select class="add-priority-select" id="bulk-paytype">
+              <option value="payable">Payable</option>
+              <option value="loan">Loan</option>
+            </select>
+            <div style="font-size:11px;color:var(--muted);margin-top:4px">Applies to everything added below — for a mixed batch, run this twice.</div>
+          </div>` : ''}
 
           <div>
             <div style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:4px">Paste multiple rows</div>
@@ -3880,6 +3910,8 @@ function bulkAddFromPaste(deskId) {
   const ta = document.getElementById('bulk-paste-text');
   const lines = ta.value.split('\n').map(l => l.trim()).filter(Boolean);
   if (!lines.length) return;
+  const payTypeEl = document.getElementById('bulk-paytype');
+  const payType = payTypeEl ? payTypeEl.value : undefined;
   if (!state.desks[deskId]) state.desks[deskId] = [];
   let added = 0;
   lines.forEach(line => {
@@ -3888,7 +3920,7 @@ function bulkAddFromPaste(deskId) {
     state.desks[deskId].unshift(normalizeTask({
       id: deskId + '_' + Date.now() + '_' + added,
       title, meta: '', priority: 'p2', done: false, notes: '', date, status: 'not-started', link: '',
-      kind: defaultKindForDesk(deskId), cost, account,
+      kind: defaultKindForDesk(deskId), cost, account, payType,
     }));
     added++;
   });
@@ -3906,6 +3938,8 @@ function bulkAddRepeating(deskId) {
   const costVal = costEl ? parseFloat(costEl.value) : NaN;
   const accountEl = document.getElementById('bulk-rep-account');
   const account = accountEl ? accountEl.value.trim() : '';
+  const payTypeEl = document.getElementById('bulk-paytype');
+  const payType = payTypeEl ? payTypeEl.value : undefined;
   const everyDays = parseInt(document.getElementById('bulk-rep-every').value, 10) || 7;
   const count = Math.max(1, Math.min(52, parseInt(document.getElementById('bulk-rep-count').value, 10) || 1));
   const start = new Date(startVal + 'T00:00:00');
@@ -3917,7 +3951,7 @@ function bulkAddRepeating(deskId) {
     state.desks[deskId].unshift(normalizeTask({
       id: deskId + '_' + Date.now() + '_' + i,
       title, meta: '', priority: 'p2', done: false, notes: '', date: fmtDate(d), status: 'not-started', link: '',
-      kind: defaultKindForDesk(deskId), cost: isNaN(costVal) ? null : costVal, account,
+      kind: defaultKindForDesk(deskId), cost: isNaN(costVal) ? null : costVal, account, payType,
     }));
   }
   saveState();
