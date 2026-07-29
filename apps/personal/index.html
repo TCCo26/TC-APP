@@ -953,6 +953,8 @@
     </div>
     <div id="vacation-banner"></div>
     <div class="g4" id="overview-stats"></div>
+    <div class="sl">This week's focus — Skill · Education · Hobby for the 6–9 PM block</div>
+    <div class="card" id="weekly-focus-card" style="margin-bottom:1rem"></div>
     <div class="sl">Weekday routine — <span id="routine-stat"></span><span id="routine-streak" style="margin-left:6px;color:var(--text3);font-weight:400"></span></div>
     <div class="card" id="routine-checklist"></div>
     <div class="sl">Money</div>
@@ -1018,6 +1020,13 @@
       <div class="leg-i"><div class="leg-d" style="background:var(--green)"></div>Proficient</div>
     </div>
     <div id="hobby-sections"></div>
+
+    <div class="sl">Skills — pulled into your weekly focus checklist</div>
+    <div id="skills-list-hobbies"></div>
+    <div class="add-row">
+      <input id="skill-inp-hobbies" type="text" placeholder="Add a skill (e.g. Piano, Public speaking)…">
+      <button onclick="addSkill('skill-inp-hobbies')"><i class="ti ti-plus"></i> Add</button>
+    </div>
   </div>
 
   <!-- BUSINESS -->
@@ -1050,6 +1059,13 @@
       <input id="topic-title-inp" type="text" placeholder="Topic to study (e.g. Behavioral economics)">
       <button onclick="addStudyTopic()"><i class="ti ti-plus"></i> Add topic</button>
       <button class="btn" onclick="openQuickAdd('bulkStudyTopics')"><i class="ti ti-list"></i> Bulk add</button>
+    </div>
+
+    <div class="sl">Skills — pulled into your weekly focus checklist</div>
+    <div id="skills-list-education"></div>
+    <div class="add-row">
+      <input id="skill-inp-education" type="text" placeholder="Add a skill (e.g. Excel modeling, Negotiation)…">
+      <button onclick="addSkill('skill-inp-education')"><i class="ti ti-plus"></i> Add</button>
     </div>
   </div>
 
@@ -1119,7 +1135,7 @@
         <div class="journal-toolbar-divider"></div>
         <button type="button" onmousedown="event.preventDefault()" onclick="document.execCommand('removeFormat')" title="Clear formatting"><i class="ti ti-clear-formatting"></i></button>
       </div>
-      <div id="journal-text-inp" class="journal-editable journal-rich" contenteditable="true" data-ph="What's on your mind today?"></div>
+      <div id="journal-text-inp" class="journal-editable journal-rich" contenteditable="true" data-ph="What's on your mind today?" onkeydown="onJournalEditableKeydown(event)"></div>
       <button class="btn" onclick="addJournalEntry()" style="margin-top:8px">Save entry</button>
     </div>
     <div class="sl">Past entries</div>
@@ -1567,6 +1583,8 @@ const DEFAULT = {
   shoppingList: [],
   travelLog: [],
   bizStepChecks: {},
+  skills: [],
+  weeklyFocus: { weekStart: "", skill: "", education: "", hobby: "" },
 };
 
 const NEWS_LINKS = [
@@ -2676,6 +2694,9 @@ function renderSidebar() {
   `;
 }
 
+// The 6–9 PM block is three 45min–1hr slots, each tied to whatever this
+// week's Skill/Education/Hobby picks are (see weeklyFocus below) — the
+// activity label is filled in dynamically at render time via focusSlot.
 const ROUTINE_ITEMS = [
   { time: "5:45 AM", activity: "Wake up" },
   { time: "6:00–7:30 AM", activity: "Workout" },
@@ -2683,12 +2704,68 @@ const ROUTINE_ITEMS = [
   { time: "8:00–8:30 AM", activity: "Commute" },
   { time: "~10:00 AM", activity: "Brunch" },
   { time: "Work hours", activity: "—", noCheck: true },
-  { time: "5:00–6:00 PM", activity: "Dinner" },
-  { time: "6:00–8:00 PM", activity: "Leisure block, gaming ends 8:00 sharp" },
-  { time: "8:00–9:00 PM", activity: "Wind-down buffer, phone leaves the room" },
-  { time: "9:00–10:00 PM", activity: "Reading" },
+  { time: "5:00–6:00 PM", activity: "Dinner + errands/chores" },
+  { time: "6:00–7:00 PM", activity: "Skill practice", focusSlot: "skill" },
+  { time: "7:00–8:00 PM", activity: "Education", focusSlot: "education" },
+  { time: "8:00–9:00 PM", activity: "Hobby", focusSlot: "hobby" },
+  { time: "9:00–10:00 PM", activity: "Wind-down buffer, phone leaves the room" },
   { time: "10:00–10:30 PM", activity: "Lights out" },
 ];
+
+// Monday-anchored ISO date for whatever week `d` falls in — used to detect
+// "new week, time to pick fresh focuses" and to keep the routine streak's
+// weekday math consistent.
+function weekStartIso(d) {
+  d = new Date(d);
+  const day = d.getDay();
+  const diff = (day === 0 ? -6 : 1) - day;
+  d.setDate(d.getDate() + diff);
+  return d.toISOString().slice(0, 10);
+}
+
+function skillPool() { return (STATE.skills || []).slice().sort(); }
+function educationPool() {
+  const courses = (STATE.eduContent || EDU).map(e => e.title);
+  const selfStudy = (STATE.studyTopics || []).map(t => t.title);
+  return [...new Set([...courses, ...selfStudy])].sort();
+}
+function hobbyPool() { return [...PHYSICAL, ...ARTISTIC, ...MENTAL].sort(); }
+
+function renderWeeklyFocus() {
+  const el = document.getElementById("weekly-focus-card");
+  if (!el) return;
+  if (!STATE.weeklyFocus) STATE.weeklyFocus = { weekStart: "", skill: "", education: "", hobby: "" };
+  const wk = weekStartIso(new Date());
+  const needsPick = STATE.weeklyFocus.weekStart !== wk;
+  const opt = (arr, sel) => `<option value="">— choose —</option>` + arr.map(v =>
+    `<option value="${escHtml(v)}" ${v === sel ? "selected" : ""}>${escHtml(v)}</option>`).join("");
+  el.innerHTML = `
+    <div class="f11" style="${needsPick ? "color:var(--amber)" : "color:var(--text3)"};margin-bottom:8px">
+      ${needsPick ? "New week — pick your 3 focuses for the 6–9 PM block." : `Locked in for the week of ${wk}.`}
+    </div>
+    <div class="g3">
+      <div>
+        <div class="f11 tc" style="margin-bottom:4px">Skill</div>
+        <select onchange="saveWeeklyFocusField('skill', this.value)">${opt(skillPool(), STATE.weeklyFocus.skill)}</select>
+      </div>
+      <div>
+        <div class="f11 tc" style="margin-bottom:4px">Education</div>
+        <select onchange="saveWeeklyFocusField('education', this.value)">${opt(educationPool(), STATE.weeklyFocus.education)}</select>
+      </div>
+      <div>
+        <div class="f11 tc" style="margin-bottom:4px">Hobby</div>
+        <select onchange="saveWeeklyFocusField('hobby', this.value)">${opt(hobbyPool(), STATE.weeklyFocus.hobby)}</select>
+      </div>
+    </div>`;
+}
+function saveWeeklyFocusField(field, val) {
+  if (!STATE.weeklyFocus) STATE.weeklyFocus = { weekStart: "", skill: "", education: "", hobby: "" };
+  STATE.weeklyFocus.weekStart = weekStartIso(new Date());
+  STATE.weeklyFocus[field] = val;
+  saveState();
+  renderWeeklyFocus();
+  renderRoutineChecklist();
+}
 
 function isWeekday(date) {
   const d = date.getDay();
@@ -2761,19 +2838,23 @@ function renderRoutineChecklist() {
   }
 
   if (statEl) statEl.textContent = `${doneCount}/${checkableIdx.length} done today`;
+  const focus = STATE.weeklyFocus || {};
   el.innerHTML = ROUTINE_ITEMS.map((r, i) => {
+    const activity = r.focusSlot
+      ? (focus[r.focusSlot] ? `${r.activity} — ${focus[r.focusSlot]}` : `${r.activity} — pick this week's focus above`)
+      : r.activity;
     if (r.noCheck) {
       return `<div class="routine-row">
         <div class="chk" style="visibility:hidden"></div>
         <div class="routine-time">${r.time}</div>
-        <div class="routine-activity tc">${r.activity}</div>
+        <div class="routine-activity tc">${activity}</div>
       </div>`;
     }
     const checked = !!todayLog[i];
     return `<div class="chk-row${checked ? " done" : ""}" onclick="toggleRoutineItem(${i})">
       <div class="chk${checked ? " on" : ""}"><i class="ti ti-check"></i></div>
       <div class="routine-time">${r.time}</div>
-      <div class="routine-activity">${r.activity}</div>
+      <div class="routine-activity">${activity}</div>
     </div>`;
   }).join("");
 }
@@ -2829,6 +2910,7 @@ function renderOverview() {
   `;
 
   renderCategoryWidgets();
+  renderWeeklyFocus();
   renderRoutineChecklist();
 
   renderGoalsChart();
@@ -3100,6 +3182,39 @@ function renderHobbies() {
        </div>`;
      }).join("")}</div>`
   ).join("");
+  renderSkillsList();
+}
+
+// Skills are a freeform pool the weekly focus checklist draws its "Skill"
+// options from — addable from either the Hobbies or Education page since a
+// skill can come from either context, but they're the same underlying list.
+function renderSkillsList() {
+  const html = (STATE.skills || []).length
+    ? STATE.skills.map((s, i) =>
+        `<span class="chk-lbl" style="display:inline-flex;align-items:center;gap:4px;margin:2px 4px 2px 0;padding:3px 8px;border-radius:12px;background:var(--bg3)">${escHtml(s)}<i class="ti ti-x" style="cursor:pointer;font-size:11px" onclick="deleteSkill(${i})"></i></span>`
+      ).join("")
+    : `<div class="f11" style="color:var(--text3)">No skills added yet.</div>`;
+  ["skills-list-hobbies", "skills-list-education"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = html;
+  });
+}
+function addSkill(inputId) {
+  const inp = document.getElementById(inputId);
+  const v = inp.value.trim();
+  if (!v) return;
+  if (!STATE.skills) STATE.skills = [];
+  if (!STATE.skills.includes(v)) STATE.skills.push(v);
+  inp.value = "";
+  saveState();
+  renderSkillsList();
+  renderWeeklyFocus();
+}
+function deleteSkill(i) {
+  STATE.skills.splice(i, 1);
+  saveState();
+  renderSkillsList();
+  renderWeeklyFocus();
 }
 
 function renderBusiness() {
@@ -3160,6 +3275,7 @@ function renderEducation() {
     </div>`
   ).join("");
   renderStudyTopics();
+  renderSkillsList();
 }
 function editEdu(ei, key, el) { STATE.eduContent[ei][key] = el.innerText.trim(); saveState(); }
 function editEduIdea(ei, ii, el) { STATE.eduContent[ei].ideas[ii] = el.innerText.trim(); saveState(); }
@@ -3341,6 +3457,40 @@ let journalEditingIndex = null;
 let journalComposerTags = [];
 let journalEditTags = [];
 
+// Google Docs-style autoformat: typing "- ", "* ", or "1. " at the start of
+// a line converts it into a bullet/numbered list instead of inserting the
+// space, so lists don't need the toolbar buttons for the common case.
+// Mirrors the Notes editor on the business dashboard. Reused for both the
+// entry composer and the per-entry edit box via ev.currentTarget.
+function journalBlockAncestor(editable, node) {
+  let el = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+  while (el && el !== editable && !['DIV','P','LI'].includes(el.tagName)) el = el.parentElement;
+  return (el && el !== editable) ? el : editable;
+}
+function onJournalEditableKeydown(ev) {
+  if (ev.key !== ' ') return;
+  const editable = ev.currentTarget;
+  const sel = window.getSelection();
+  if (!sel.rangeCount || !sel.getRangeAt(0).collapsed) return;
+  const range = sel.getRangeAt(0);
+  const block = journalBlockAncestor(editable, range.startContainer);
+  const preRange = document.createRange();
+  preRange.selectNodeContents(block);
+  preRange.setEnd(range.startContainer, range.startOffset);
+  const textBefore = preRange.toString();
+
+  const isBullet = /^[-*]$/.test(textBefore);
+  const isNumbered = /^\d+\.$/.test(textBefore);
+  if (!isBullet && !isNumbered) return;
+
+  ev.preventDefault();
+  sel.removeAllRanges();
+  sel.addRange(preRange);
+  document.execCommand('delete');
+  try { document.execCommand('styleWithCSS', false, true); } catch (e) {}
+  document.execCommand(isBullet ? 'insertUnorderedList' : 'insertOrderedList');
+}
+
 const JOURNAL_TOOLBAR_HTML = `<div class="journal-toolbar">
   <button type="button" onmousedown="event.preventDefault()" onclick="document.execCommand('bold')" title="Bold"><b>B</b></button>
   <button type="button" onmousedown="event.preventDefault()" onclick="document.execCommand('italic')" title="Italic"><i>I</i></button>
@@ -3405,7 +3555,7 @@ function renderJournal() {
             <input id="journal-edit-title" class="journal-title-inp" type="text" placeholder="Add a title for this entry (optional)…" value="${(e.title || "").replace(/"/g, "&quot;")}">
             <div class="journal-tags" id="journal-edit-tags"></div>
             ${JOURNAL_TOOLBAR_HTML}
-            <div id="journal-edit-inp" class="journal-editable journal-rich" contenteditable="true">${e.text}</div>
+            <div id="journal-edit-inp" class="journal-editable journal-rich" contenteditable="true" onkeydown="onJournalEditableKeydown(event)">${e.text}</div>
             <div style="display:flex;gap:8px;margin-top:8px">
               <button class="btn" onclick="saveJournalEdit(${i})">Save</button>
               <button class="btn" onclick="cancelJournalEdit()">Cancel</button>
@@ -4828,12 +4978,31 @@ function doneSlicesFor(items, doneLabel) {
     { label: "Not yet", value: notDoneItems.length, color: "var(--chart-track)", items: notDoneItems.map(it => it.title) },
   ];
 }
-function interestChartGroupHTML(label, items, doneLabel) {
+// Episode progress is tracked per show (epWatched/epTotal, edited inline on
+// the TV row) and rolled up here across the whole TV list — completed vs
+// not-yet-watched episodes, not just completed vs not-yet-started shows.
+function episodeStatsFor(items) {
+  const watched = items.reduce((s, it) => s + (it.epWatched || 0), 0);
+  const total = items.reduce((s, it) => s + (it.epTotal || 0), 0);
+  return { watched, total, remaining: Math.max(0, total - watched) };
+}
+function episodeCounterHTML(items) {
+  const { watched, total, remaining } = episodeStatsFor(items);
+  if (!total) return `<div class="chart-empty">Add episode counts on a show to track progress.</div>`;
+  const slices = [
+    { label: "Watched", value: watched, color: "var(--green)", items: [] },
+    { label: "Remaining", value: remaining, color: "var(--chart-track)", items: [] },
+  ];
+  return svgDonut(slices) + `<div class="f11 tc" style="margin-top:4px">${watched}/${total} episodes</div>`;
+}
+
+function interestChartGroupHTML(label, items, doneLabel, catKey) {
   const tagged = items.filter(it => it.genre).length;
   const done = items.filter(it => it.done).length;
+  const isTv = catKey === 'tv';
   return `<div class="interest-chart-group">
     <div class="chart-title">${label}</div>
-    <div class="g3">
+    <div class="${isTv ? 'g4' : 'g3'}">
       <div class="card">
         <div class="f11 tc" style="margin-bottom:4px">Genre — ${tagged}/${items.length} tagged</div>
         ${svgDonut(genreSlicesFor(items))}
@@ -4846,6 +5015,10 @@ function interestChartGroupHTML(label, items, doneLabel) {
         <div class="f11 tc" style="margin-bottom:4px">Rating distribution</div>
         ${ratingHistogramHTML(items)}
       </div>
+      ${isTv ? `<div class="card">
+        <div class="f11 tc" style="margin-bottom:4px">Episode progress</div>
+        ${episodeCounterHTML(items)}
+      </div>` : ''}
     </div>
   </div>`;
 }
@@ -4898,7 +5071,7 @@ function attachListSearch(inputId, listElId, getItems, rowFn, emptyAllHTML, matc
 function renderWatchlistCharts() {
   const el = document.getElementById("watchlist-genre-charts");
   if (!el) return;
-  el.innerHTML = WATCHLIST_CATS.map(c => interestChartGroupHTML(c.label, STATE.watchlist[c.key] || [], c.doneLabel)).join("");
+  el.innerHTML = WATCHLIST_CATS.map(c => interestChartGroupHTML(c.label, STATE.watchlist[c.key] || [], c.doneLabel, c.key)).join("");
 }
 
 function ratingStarsHTML(rating, onClickFor) {
@@ -4917,6 +5090,7 @@ function watchlistRowHTML(cat, c, it, i) {
       <span class="chk-lbl" contenteditable="true" onblur="editWatchlist('${cat}',${i},'title',this)" onclick="event.stopPropagation()">${it.title}</span>
       <span style="font-size:11px;color:var(--text3);flex-shrink:0" contenteditable="true" onblur="editWatchlist('${cat}',${i},'person',this)" onclick="event.stopPropagation()" data-ph="${c.personPh.toLowerCase()}">${it.person || ''}</span>
       <span style="font-size:10px;color:var(--text3);flex-shrink:0" contenteditable="true" onblur="editWatchlist('${cat}',${i},'genre',this)" onclick="event.stopPropagation()" data-ph="genre">${it.genre || ''}</span>
+      ${cat === 'tv' ? `<span style="font-size:10px;color:var(--text3);flex-shrink:0;white-space:nowrap" onclick="event.stopPropagation()" title="Episodes watched / total"><span contenteditable="true" onblur="editWatchlistEpisodes('${cat}',${i},'epWatched',this)" data-ph="0">${it.epWatched || ''}</span>/<span contenteditable="true" onblur="editWatchlistEpisodes('${cat}',${i},'epTotal',this)" data-ph="?">${it.epTotal || ''}</span> eps</span>` : ''}
       <i class="ti ti-trash" style="font-size:13px;color:var(--text3);cursor:pointer;flex-shrink:0" onclick="event.stopPropagation();deleteWatchlist('${cat}',${i})"></i>
     </div>
     <div class="list-item-extra">
@@ -5259,6 +5433,14 @@ function toggleWatchlist(cat, i) {
   saveState(); renderWatchlist();
 }
 function editWatchlist(cat, i, field, el) { STATE.watchlist[cat][i][field] = el.innerText.trim(); saveState(); }
+function editWatchlistEpisodes(cat, i, field, el) {
+  const n = parseInt(el.innerText.replace(/[^\d]/g, ''), 10);
+  const val = isNaN(n) ? 0 : Math.max(0, n);
+  STATE.watchlist[cat][i][field] = val;
+  el.innerText = val || '';
+  saveState();
+  renderWatchlistCharts();
+}
 function deleteWatchlist(cat, i) { STATE.watchlist[cat].splice(i, 1); saveState(); renderWatchlist(); }
 function setWatchlistRating(cat, i, n) {
   const it = STATE.watchlist[cat][i];
