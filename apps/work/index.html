@@ -1352,13 +1352,14 @@ body {
 const DESKS = [
   { id:'email', num:'01', name:'Email, investors & loans', sub:'Correspondence, relations, follow-ups', icon:'📬', ic_bg:'#E6F1FB', ic_color:'#185FA5' },
   { id:'fin',   num:'02', name:'Financial',                sub:'Branch P&L, collections, variances',    icon:'📊', ic_bg:'#E1F5EE', ic_color:'#0F6E56' },
-  { id:'pay',   num:'03', name:'Repayment Dashboard',      sub:'Payment schedule, amounts owed, due dates', icon:'🧾', ic_bg:'#FAECE7', ic_color:'#993C1D' },
-  { id:'paytasks', num:'04', name:'Payables Tasks',        sub:'Follow-ups, negotiations, and admin tied to payables', icon:'📌', ic_bg:'#FBEEE5', ic_color:'#A6491D' },
-  { id:'mkt',   num:'05', name:'Marketing',                sub:'Approvals, designer briefs, calendar',  icon:'📣', ic_bg:'#EEEDFE', ic_color:'#534AB7' },
-  { id:'ops',   num:'06', name:'Operational',              sub:'Staff, supplies, quality, branch issues',icon:'⚙️', ic_bg:'#FBEAF0', ic_color:'#993556' },
-  { id:'dev',   num:'07', name:'Business Development',     sub:'New branches, site selection, contractor coordination', icon:'🏗️', ic_bg:'#FAEEDA', ic_color:'#854F0B' },
-  { id:'report',num:'08', name:'Company review',           sub:'Snapshots, partner updates, scorecard', icon:'📋', ic_bg:'#EAF3DE', ic_color:'#3B6D11' },
-  { id:'legal', num:'09', name:'Legal and Administrative', sub:'Permits, registrations, SEC/FDA & compliance filings', icon:'⚖️', ic_bg:'#ECEDF2', ic_color:'#37415C' },
+  { id:'loans', num:'03', name:'Loan Repayments',          sub:'Loan schedules, amounts owed, due dates', icon:'🏦', ic_bg:'#E9F0FB', ic_color:'#1D4E93' },
+  { id:'pay',   num:'04', name:'Payables',                 sub:'Vendor & operational payment schedule, amounts owed, due dates', icon:'🧾', ic_bg:'#FAECE7', ic_color:'#993C1D' },
+  { id:'paytasks', num:'05', name:'Payables Tasks',        sub:'Follow-ups, negotiations, and admin tied to payables & loans', icon:'📌', ic_bg:'#FBEEE5', ic_color:'#A6491D' },
+  { id:'mkt',   num:'06', name:'Marketing',                sub:'Approvals, designer briefs, calendar',  icon:'📣', ic_bg:'#EEEDFE', ic_color:'#534AB7' },
+  { id:'ops',   num:'07', name:'Operational',              sub:'Staff, supplies, quality, branch issues',icon:'⚙️', ic_bg:'#FBEAF0', ic_color:'#993556' },
+  { id:'dev',   num:'08', name:'Business Development',     sub:'New branches, site selection, contractor coordination', icon:'🏗️', ic_bg:'#FAEEDA', ic_color:'#854F0B' },
+  { id:'report',num:'09', name:'Company review',           sub:'Snapshots, partner updates, scorecard', icon:'📋', ic_bg:'#EAF3DE', ic_color:'#3B6D11' },
+  { id:'legal', num:'10', name:'Legal and Administrative', sub:'Permits, registrations, SEC/FDA & compliance filings', icon:'⚖️', ic_bg:'#ECEDF2', ic_color:'#37415C' },
 ];
 
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -1371,13 +1372,18 @@ function priorityOptionsHtml(current) {
   return Object.keys(PRIORITY_LABELS).map(k => `<option value="${k}" ${k === current ? 'selected' : ''}>${PRIORITY_LABELS[k]}</option>`).join('');
 }
 
-// A task's kind ('task' vs 'payment') is now implied entirely by which of
-// the two Payables desks it lives on (Repayment Dashboard = payment,
-// Payables Tasks = task) — see defaultKindForDesk — but the field itself is
-// kept so the calendar panel, cost display, etc. don't need to special-case
-// which desk they're looking at.
+// A task's kind ('task' vs 'payment') is now implied entirely by which desk
+// it lives on — the two payment desks (Loans, Payables) hold kind:'payment'
+// entries, everything else (including Payables Tasks) holds kind:'task' —
+// see defaultKindForDesk — but the field itself is kept so the calendar
+// panel, cost display, etc. don't need to special-case which desk they're
+// looking at.
+const PAYMENT_DESKS = ['loans', 'pay'];
+function isPaymentDesk(deskId) {
+  return PAYMENT_DESKS.includes(deskId);
+}
 function defaultKindForDesk(deskId) {
-  return deskId === 'pay' ? 'payment' : 'task';
+  return isPaymentDesk(deskId) ? 'payment' : 'task';
 }
 
 function fmtCost(n) {
@@ -1402,9 +1408,11 @@ const DEFAULT_TASKS = {
     { id:'fin4', title:'QDMS-SP: June P&L reviewed and filed', meta:'Completed Monday · No action needed', priority:'p4', done:true, notes:'' },
     { id:'fin5', title:'Branch 4 & 5 pre-opening cost tracker', meta:'Monitor only · Capex at 67% of budget', priority:'p4', done:false, notes:'' },
   ],
+  loans: [
+    { id:'loan1', title:'Monthly partner debt repayment — P700,000', meta:'Due Friday · Confirm cash position before releasing', priority:'p2', done:false, notes:'', kind:'payment', cost:700000, account:'Partner loan' },
+  ],
   pay: [
     { id:'pay1', title:'Supplier invoice #2024-441 — P38,500 · 5 days overdue', meta:'Reagent supplier · Pay today to avoid supply disruption', priority:'p1', done:false, notes:'', kind:'payment', cost:38500 },
-    { id:'pay2', title:'Monthly partner debt repayment — P700,000', meta:'Due Friday · Confirm cash position before releasing', priority:'p2', done:false, notes:'', kind:'payment', cost:700000 },
     { id:'pay3', title:'QDMS-SP rent — P74,320 · Due end of week', meta:'Auto-schedule from operations account', priority:'p2', done:false, notes:'', kind:'payment', cost:74320 },
     { id:'pay4', title:'Professional fees (3 branches) — P27,002 total', meta:'Bundle and pay in one transfer on Thursday', priority:'p2', done:false, notes:'', kind:'payment', cost:27002 },
   ],
@@ -1511,6 +1519,25 @@ function migratePayablesSplit(parsed) {
   parsed.desks.paytasks = moved;
 }
 
+// One-time migration: the Repayment Dashboard (desk 'pay') used to hold both
+// loan repayments and ordinary vendor/operational payables together. Split
+// it into a dedicated "Loan Repayments" desk and a "Payables" desk (still id
+// 'pay'), using a keyword match against the title/notes to guess which
+// existing entries are loans. Runs once — a browser that already has a
+// loans desk (even an empty one) is left alone; anything the keyword match
+// misses can be corrected afterward with the per-task move button.
+function migrateLoansSplit(parsed) {
+  if (!parsed.desks.pay || parsed.desks.loans) return;
+  const LOAN_RE = /\bloan\b|\bdebt\b|\bborrow/i;
+  const moved = [];
+  parsed.desks.pay = parsed.desks.pay.filter(t => {
+    const text = `${t.title || ''} ${t.meta || ''} ${t.notes || ''}`;
+    if (LOAN_RE.test(text)) { moved.push(t); return false; }
+    return true;
+  });
+  parsed.desks.loans = moved;
+}
+
 function loadState() {
   try {
     const raw = localStorage.getItem(STORE_KEY);
@@ -1519,6 +1546,7 @@ function loadState() {
       if (!parsed.desks) parsed.desks = {};
       migrateLegalDesk(parsed);
       migratePayablesSplit(parsed);
+      migrateLoansSplit(parsed);
       DESKS.forEach(d => {
         if (!parsed.desks[d.id]) parsed.desks[d.id] = JSON.parse(JSON.stringify(DEFAULT_TASKS[d.id] || []));
       });
@@ -1549,6 +1577,43 @@ let currentNoteId = null;          // id of the note entry currently open in the
 let notesFilterDesk = null;        // null = all desks
 let notesSearchQuery = '';
 let doneSectionExpanded = false;
+
+// Per-desk sort preference — transient, resets on reload (same as
+// doneSectionExpanded above). 'priority' keeps the existing P1–P4 grouped
+// view; every other mode flattens the open tasks into one sorted list.
+let deskSortMode = {};
+const SORT_OPTIONS = [
+  { key:'priority', label:'Priority' },
+  { key:'due',       label:'Due date' },
+  { key:'created',   label:'Recently added' },
+  { key:'alpha',     label:'A–Z' },
+];
+const SORT_OPTIONS_PAY = SORT_OPTIONS.concat([{ key:'amount', label:'Amount' }]);
+const SORT_LABELS = Object.fromEntries(SORT_OPTIONS_PAY.map(o => [o.key, o.label]));
+
+function setDeskSort(deskId, mode) {
+  deskSortMode[deskId] = mode;
+  renderMain();
+}
+
+function sortTasksBy(tasks, mode) {
+  const arr = tasks.slice();
+  if (mode === 'due') {
+    arr.sort((a, b) => {
+      if (!a.date && !b.date) return 0;
+      if (!a.date) return 1;
+      if (!b.date) return -1;
+      return a.date.localeCompare(b.date);
+    });
+  } else if (mode === 'created') {
+    arr.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  } else if (mode === 'alpha') {
+    arr.sort((a, b) => a.title.localeCompare(b.title));
+  } else if (mode === 'amount') {
+    arr.sort((a, b) => (typeof b.cost === 'number' ? b.cost : -1) - (typeof a.cost === 'number' ? a.cost : -1));
+  }
+  return arr;
+}
 
 // Vacation mode: a date range during which due-date escalation, streak
 // requirements, and push nudges all pause. Nothing about the underlying
@@ -2093,7 +2158,7 @@ function renderMorningChecklist() {
 function payablesRollup() {
   const today = fmtDate(new Date());
   const weekEnd = fmtDate(new Date(Date.now() + 7 * 86400000));
-  const open = (state.desks.pay || []).filter(t => !t.done && t.kind === 'payment' && typeof t.cost === 'number');
+  const open = PAYMENT_DESKS.flatMap(id => state.desks[id] || []).filter(t => !t.done && t.kind === 'payment' && typeof t.cost === 'number');
   const total = open.reduce((sum, t) => sum + t.cost, 0);
   const overdue = open.filter(t => t.date && t.date < today).reduce((sum, t) => sum + t.cost, 0);
   const dueThisWeek = open.filter(t => t.date && t.date >= today && t.date <= weekEnd).reduce((sum, t) => sum + t.cost, 0);
@@ -2104,13 +2169,13 @@ function payablesRollup() {
 // Entries saved before the account field existed fall back to their title,
 // which is what the grouping used before — so old data keeps grouping the
 // same way it always did until you go back and assign it a real account.
-function accountKnownNames() {
+function accountKnownNames(deskId) {
   const names = new Set();
-  (state.desks.pay || []).forEach(t => { if (t.account) names.add(t.account); });
+  (state.desks[deskId] || []).forEach(t => { if (t.account) names.add(t.account); });
   return [...names].sort();
 }
-function repaymentByAccount() {
-  const items = (state.desks.pay || []).filter(t => typeof t.cost === 'number' && t.cost > 0);
+function repaymentByAccount(deskId) {
+  const items = (state.desks[deskId] || []).filter(t => typeof t.cost === 'number' && t.cost > 0);
   const groups = {};
   items.forEach(t => {
     const key = t.account || t.title;
@@ -2121,14 +2186,20 @@ function repaymentByAccount() {
   return Object.values(groups).sort((a, b) => (b.paid + b.outstanding) - (a.paid + a.outstanding));
 }
 
-function renderRepaymentSummary() {
-  const accounts = repaymentByAccount();
+// Rendered on both payment desks (Loans, Payables), scoped to whichever one
+// is active — each desk gets its own paid-vs-outstanding picture instead of
+// one combined chart, since a loan balance and a vendor payable roll up very
+// differently.
+function renderRepaymentSummary(deskId) {
+  const desk = DESKS.find(d => d.id === deskId);
+  const accounts = repaymentByAccount(deskId);
   const totalPaid = accounts.reduce((s, a) => s + a.paid, 0);
   const totalOutstanding = accounts.reduce((s, a) => s + a.outstanding, 0);
   const grandTotal = totalPaid + totalOutstanding;
   if (!grandTotal) return '';
 
   const pct = Math.round((totalPaid / grandTotal) * 100);
+  const byLabel = deskId === 'loans' ? 'By lender — paid vs owed' : 'By vendor — paid vs owed';
 
   const accountBarsHtml = accounts.map(a => `
     <div class="prod-bar-row">
@@ -2142,7 +2213,7 @@ function renderRepaymentSummary() {
 
   return `
     <div class="section-divider">
-      <span class="section-divider-label">Repayment summary</span>
+      <span class="section-divider-label">${desk.name} summary</span>
       <div class="section-divider-line"></div>
     </div>
     <div class="prod-grid">
@@ -2166,7 +2237,7 @@ function renderRepaymentSummary() {
         </div>
       </div>
       <div class="prod-card prod-card-wide">
-        <div class="prod-card-title">By account — paid vs owed</div>
+        <div class="prod-card-title">${byLabel}</div>
         <div class="prod-bars">${accountBarsHtml}</div>
       </div>
     </div>`;
@@ -2191,8 +2262,8 @@ function buildDailyBriefText() {
   lines.push(...(dueToday.length ? dueToday.map(({t, d}) => `  • [${d.name}] ${t.title}`) : ['  None.']));
 
   const rollup = payablesRollup();
-  const payDue = (state.desks.pay || []).filter(t => !t.done && t.kind === 'payment' && t.date && t.date <= today);
-  lines.push('', `PAYABLES — ${fmtCost(rollup.total)} outstanding, ${fmtCost(rollup.overdue)} overdue`);
+  const payDue = PAYMENT_DESKS.flatMap(id => state.desks[id] || []).filter(t => !t.done && t.kind === 'payment' && t.date && t.date <= today);
+  lines.push('', `PAYABLES & LOANS — ${fmtCost(rollup.total)} outstanding, ${fmtCost(rollup.overdue)} overdue`);
   lines.push(...(payDue.length ? payDue.map(t => `  • ${t.title}${typeof t.cost === 'number' ? ' — ' + fmtCost(t.cost) : ''}`) : ['  Nothing due or overdue today.']));
 
   const meetingsToday = (state.meetings || []).filter(m => m.date === today).sort((a, b) => (a.time || '').localeCompare(b.time || ''));
@@ -2262,11 +2333,14 @@ function renderOverviewMain() {
   if (rollup.count > 0) {
     html += `
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:16px;display:flex;gap:28px;flex-wrap:wrap;align-items:center">
-        <div style="font-size:12px;font-weight:600;color:var(--text-2)">🧾 Payables outstanding</div>
+        <div style="font-size:12px;font-weight:600;color:var(--text-2)">🧾 Payables & loans outstanding</div>
         <div><div style="font-size:10px;color:var(--muted)">Total outstanding</div><div style="font-size:16px;font-weight:700">${fmtCost(rollup.total)}</div></div>
         ${rollup.overdue > 0 ? `<div><div style="font-size:10px;color:var(--muted)">Overdue</div><div style="font-size:16px;font-weight:700;color:var(--p1-color)">${fmtCost(rollup.overdue)}</div></div>` : ''}
         <div><div style="font-size:10px;color:var(--muted)">Due within 7 days</div><div style="font-size:16px;font-weight:700">${fmtCost(rollup.dueThisWeek)}</div></div>
-        <button class="btn" style="margin-left:auto;font-size:11px;padding:4px 8px" onclick="switchView('pay')">View →</button>
+        <div style="margin-left:auto;display:flex;gap:8px">
+          <button class="btn" style="font-size:11px;padding:4px 8px" onclick="switchView('loans')">Loans →</button>
+          <button class="btn" style="font-size:11px;padding:4px 8px" onclick="switchView('pay')">Payables →</button>
+        </div>
       </div>`;
   }
 
@@ -2342,6 +2416,10 @@ function renderDeskMain() {
   const done = tasks.filter(t => t.done)
     .sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || ''));
 
+  const isPay = isPaymentDesk(activeView);
+  const sortMode = deskSortMode[activeView] || 'priority';
+  const sortOptions = isPay ? SORT_OPTIONS_PAY : SORT_OPTIONS;
+
   const openByP = {
     p1: open.filter(t => effectivePriority(t) === 'p1'),
     p2: open.filter(t => effectivePriority(t) === 'p2'),
@@ -2356,6 +2434,9 @@ function renderDeskMain() {
         <div class="desk-desc">${desk.sub}</div>
       </div>
       <div class="desk-actions">
+        <select class="add-priority-select" onchange="setDeskSort('${activeView}', this.value)" title="Sort tasks">
+          ${sortOptions.map(o => `<option value="${o.key}" ${sortMode === o.key ? 'selected' : ''}>Sort: ${o.label}</option>`).join('')}
+        </select>
         <button class="btn" onclick="openBulkAddModal('${activeView}')">＋ Bulk add</button>
         ${done.length > 0 ? `<button class="btn btn-danger" onclick="clearDone()">Clear ${done.length} done</button>` : ''}
         <button class="btn" onclick="resetDesk()">Reset desk</button>
@@ -2368,37 +2449,46 @@ function renderDeskMain() {
         onkeydown="handleAddKey(event, '${activeView}')">
       <input class="add-input" id="add-link-${activeView}" type="url" placeholder="Link (optional)" style="flex:1"
         onclick="event.stopPropagation()" onkeydown="handleAddKey(event, '${activeView}')">
-      ${activeView === 'pay' ? `<input class="add-input" id="add-cost-${activeView}" type="number" min="0" step="0.01" placeholder="Amount (₱)" style="flex:0 0 130px"
+      ${isPay ? `<input class="add-input" id="add-cost-${activeView}" type="number" min="0" step="0.01" placeholder="Amount (₱)" style="flex:0 0 130px"
         onclick="event.stopPropagation()" onkeydown="handleAddKey(event, '${activeView}')">` : ''}
-      ${activeView === 'pay' ? `<input class="add-input" id="add-account-${activeView}" list="account-datalist" placeholder="Person/company" style="flex:0 0 150px"
+      ${isPay ? `<input class="add-input" id="add-account-${activeView}" list="account-datalist" placeholder="Person/company" style="flex:0 0 150px"
         onclick="event.stopPropagation()" onkeydown="handleAddKey(event, '${activeView}')">` : ''}
       <select class="add-priority-select" id="add-priority-${activeView}" onclick="event.stopPropagation()">${priorityOptionsHtml('p2')}</select>
       <button class="btn btn-primary" onclick="event.stopPropagation(); addTask('${activeView}')">＋ Add</button>
     </div>
-    ${activeView === 'pay' ? `<datalist id="account-datalist">${accountKnownNames().map(n => `<option value="${escHtml(n)}"></option>`).join('')}</datalist>` : ''}
+    ${isPay ? `<datalist id="account-datalist">${accountKnownNames(activeView).map(n => `<option value="${escHtml(n)}"></option>`).join('')}</datalist>` : ''}
 
-    ${activeView === 'pay' ? renderRepaymentSummary() : ''}
+    ${isPay ? renderRepaymentSummary(activeView) : ''}
 
     <div class="tasks-list" id="tasks-list">`;
 
-  const sections = [
-    { key:'p1', label: PRIORITY_LABELS.p1, tasks: openByP.p1 },
-    { key:'p2', label: PRIORITY_LABELS.p2, tasks: openByP.p2 },
-    { key:'p3', label: PRIORITY_LABELS.p3, tasks: openByP.p3 },
-    { key:'p4', label: PRIORITY_LABELS.p4, tasks: openByP.p4 },
-  ];
-
   let anySections = false;
-  sections.forEach(s => {
-    if (s.tasks.length === 0) return;
+  if (sortMode === 'priority') {
+    const sections = [
+      { key:'p1', label: PRIORITY_LABELS.p1, tasks: openByP.p1 },
+      { key:'p2', label: PRIORITY_LABELS.p2, tasks: openByP.p2 },
+      { key:'p3', label: PRIORITY_LABELS.p3, tasks: openByP.p3 },
+      { key:'p4', label: PRIORITY_LABELS.p4, tasks: openByP.p4 },
+    ];
+    sections.forEach(s => {
+      if (s.tasks.length === 0) return;
+      anySections = true;
+      html += `
+        <div class="section-divider">
+          <span class="section-divider-label">${s.label}</span>
+          <div class="section-divider-line"></div>
+        </div>`;
+      s.tasks.forEach(t => { html += taskCardHTML(t); });
+    });
+  } else if (open.length > 0) {
     anySections = true;
     html += `
       <div class="section-divider">
-        <span class="section-divider-label">${s.label}</span>
+        <span class="section-divider-label">Sorted by ${SORT_LABELS[sortMode]}</span>
         <div class="section-divider-line"></div>
       </div>`;
-    s.tasks.forEach(t => { html += taskCardHTML(t); });
-  });
+    sortTasksBy(open, sortMode).forEach(t => { html += taskCardHTML(t); });
+  }
 
   if (done.length > 0) {
     const COLLAPSE_AT = 10;
@@ -2456,10 +2546,11 @@ function taskCardHTML(t) {
         </div>
         <div class="task-controls">
           <button class="status-btn ${t.status}" onclick="cycleStatus('${t.id}')" title="Click to change status">${STATUS_LABELS[t.status]}</button>
-          ${activeView === 'pay' ? `<input type="number" class="date-input" style="width:100px" min="0" step="0.01" placeholder="Amount ₱" value="${t.cost !== null && t.cost !== undefined ? t.cost : ''}" onchange="updateTaskCost('${t.id}', this.value)" title="Total amount for this payment">` : ''}
-          ${activeView === 'pay' ? `<input type="text" class="date-input" style="width:130px" list="account-datalist" placeholder="Person/company" value="${escHtml(t.account || '')}" onchange="updateTaskAccount('${t.id}', this.value)" title="Who this payment is owed to">` : ''}
+          ${isPaymentDesk(activeView) ? `<input type="number" class="date-input" style="width:100px" min="0" step="0.01" placeholder="Amount ₱" value="${t.cost !== null && t.cost !== undefined ? t.cost : ''}" onchange="updateTaskCost('${t.id}', this.value)" title="Total amount for this payment">` : ''}
+          ${isPaymentDesk(activeView) ? `<input type="text" class="date-input" style="width:130px" list="account-datalist" placeholder="Person/company" value="${escHtml(t.account || '')}" onchange="updateTaskAccount('${t.id}', this.value)" title="Who this payment is owed to">` : ''}
           <select class="priority-btn priority-select ${effectivePriority(t)}" ${effectivePriority(t) !== t.priority ? 'title="Past due date — showing as Overdue"' : ''} onchange="updateTaskPriority('${t.id}', this.value)">${priorityOptionsHtml(effectivePriority(t))}</select>
           <input type="date" class="date-input" value="${t.date || ''}" onchange="updateTaskDate('${t.id}', this.value)" title="Due date">
+          ${isPaymentDesk(activeView) ? `<button class="delete-btn" onclick="moveToOtherPaymentDesk('${t.id}')" title="Move to ${activeView === 'pay' ? 'Loan Repayments' : 'Payables'}">⇄</button>` : ''}
           <button class="delete-btn" onclick="duplicateTask('${t.id}')" title="Duplicate task">⧉</button>
           <button class="delete-btn" onclick="deleteTask('${t.id}')" title="Delete task">✕</button>
         </div>
@@ -3594,6 +3685,22 @@ function deleteTask(id) {
 // "Unscheduled tasks" so it can be dragged onto whichever day it's needed,
 // which is the point for placing a routine/recurring task on a specific day
 // without retyping it each time.
+// Corrects a Loans/Payables migration miss, or just lets a task be
+// re-classified after the fact — moves it between the two payment desks
+// without touching anything else about it (cost, account, dates, etc).
+function moveToOtherPaymentDesk(id) {
+  const from = activeView;
+  const to = from === 'pay' ? 'loans' : 'pay';
+  if (!isPaymentDesk(from)) return;
+  const idx = (state.desks[from] || []).findIndex(t => t.id === id);
+  if (idx === -1) return;
+  const [t] = state.desks[from].splice(idx, 1);
+  if (!state.desks[to]) state.desks[to] = [];
+  state.desks[to].unshift(t);
+  saveState();
+  renderAll();
+}
+
 function duplicateTask(id) {
   for (const d of DESKS) {
     const list = state.desks[d.id] || [];
@@ -3698,7 +3805,7 @@ function addTask(deskId) {
 
 function openBulkAddModal(deskId) {
   const desk = DESKS.find(d => d.id === deskId);
-  const isPay = deskId === 'pay';
+  const isPay = isPaymentDesk(deskId);
   const html = `
     <div class="modal-overlay" onclick="if(event.target===this) closeModal()">
       <div class="modal-panel" style="max-width:540px">
