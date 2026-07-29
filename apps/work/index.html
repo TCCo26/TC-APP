@@ -2509,17 +2509,16 @@ function renderTaskListSections(scopeTasks, sortMode, scopeKey) {
   }
 
   if (done.length > 0) {
-    const COLLAPSE_AT = 10;
-    const showAll = doneSectionExpanded || done.length <= COLLAPSE_AT;
-    const visibleDone = showAll ? done : done.slice(0, COLLAPSE_AT);
-    html += `
-      <div class="section-divider">
-        <span class="section-divider-label">Tasks Completed (${done.length})</span>
-        <div class="section-divider-line"></div>
-      </div>`;
-    visibleDone.forEach(t => { html += taskCardHTML(t); });
-    if (done.length > COLLAPSE_AT) {
-      html += `<button class="btn" style="width:100%;margin-top:6px" onclick="toggleDoneExpanded()">${showAll ? 'Show fewer' : `Show ${done.length - COLLAPSE_AT} more completed`}</button>`;
+    const doneKey = `${scopeKey}|done`;
+    html += sectionDividerHTML(doneKey, `Tasks Completed (${done.length})`);
+    if (!collapsedSections[doneKey]) {
+      const COLLAPSE_AT = 10;
+      const showAll = doneSectionExpanded || done.length <= COLLAPSE_AT;
+      const visibleDone = showAll ? done : done.slice(0, COLLAPSE_AT);
+      visibleDone.forEach(t => { html += taskCardHTML(t); });
+      if (done.length > COLLAPSE_AT) {
+        html += `<button class="btn" style="width:100%;margin-top:6px" onclick="toggleDoneExpanded()">${showAll ? 'Show fewer' : `Show ${done.length - COLLAPSE_AT} more completed`}</button>`;
+      }
     }
   }
 
