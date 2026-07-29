@@ -1136,6 +1136,19 @@ body.rail-collapsed .main { margin-left: 0; }
   pointer-events: none;
 }
 #cal-chip-tooltip strong { display: block; font-size: 12px; margin-bottom: 2px; }
+
+/* ── SEARCH RESULT HIGHLIGHT ── */
+/* Flashed on whatever a search result jumps to (task card, note editor,
+   link row) so it's easy to spot after the page switches underneath it —
+   fades back to the element's own normal styling once removed. */
+.search-flash {
+  animation: searchFlash 2s ease;
+  border-radius: 8px;
+}
+@keyframes searchFlash {
+  0%, 12% { box-shadow: 0 0 0 3px var(--green); background-color: var(--green-bg); }
+  100% { box-shadow: 0 0 0 0 transparent; background-color: transparent; }
+}
 .unscheduled-tray {
   display: flex; flex-wrap: wrap; gap: 6px; padding: 10px;
   background: var(--surface); border: 1px dashed var(--border-strong);
@@ -1618,6 +1631,7 @@ let calYear = new Date().getFullYear();
 let calMonth = new Date().getMonth();
 let calFilterDesk = null;          // null = all desks
 let calFilterPaymentsOnly = false;
+let calFilterTasksOnly = false;
 let currentNoteId = null;          // id of the note entry currently open in the editor
 let notesFilterDesk = null;        // null = all desks
 let notesSearchQuery = '';
@@ -1814,15 +1828,39 @@ function searchAll(query) {
   return results;
 }
 
+// Scrolls the target into view and flashes it green — the landing page
+// alone (especially a whole desk) isn't enough to relocate one specific
+// item in it, which is the actual complaint this solves.
+function flashHighlight(elId) {
+  requestAnimationFrame(() => {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.remove('search-flash');
+    void el.offsetWidth; // restart the animation if the same element was just flashed
+    el.classList.add('search-flash');
+    setTimeout(() => el.classList.remove('search-flash'), 2000);
+  });
+}
+
 function openSearchResult(r) {
   closeModal();
   if (r.kind === 'task') {
+    // Expand any collapsed classification section on that desk first —
+    // otherwise the card that's about to be highlighted was never even
+    // rendered (see the collapsible-sections feature).
+    Object.keys(collapsedSections).forEach(k => { if (k.startsWith(r.d.id + '|')) delete collapsedSections[k]; });
     switchView(r.d.id);
+    flashHighlight('card-' + r.t.id);
   } else if (r.kind === 'note') {
     currentNoteId = r.n.id;
     switchView('notes');
+    flashHighlight('notes-editable');
   } else if (r.kind === 'link') {
+    linksFilterCat = '';
+    linksSearchQuery = '';
     switchView('links');
+    flashHighlight('link-card-' + r.l.id);
   } else if (r.kind === 'meeting') {
     const d = new Date(r.m.date + 'T00:00:00');
     calYear = d.getFullYear(); calMonth = d.getMonth();
@@ -1910,6 +1948,16 @@ function renderSearchResults(query) {
 }
 
 document.addEventListener('keydown', (e) => {
+  // Ctrl/Cmd+F opens this app's own search instead of the browser's
+  // find-in-page — unlike "/" below, this is never text a user is trying
+  // to type (Ctrl is held), so it's safe to intercept regardless of focus.
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+    e.preventDefault();
+    const existing = document.getElementById('search-input');
+    if (existing) { existing.focus(); return; }
+    openSearchModal();
+    return;
+  }
   if (e.key !== '/') return;
   const tag = (e.target && e.target.tagName || '').toLowerCase();
   if (tag === 'input' || tag === 'textarea' || (e.target && e.target.isContentEditable)) return;
@@ -2039,6 +2087,7 @@ function renderNav() {
 }
 
 function switchView(id) {
+  hideCalTooltip();
   activeView = id;
   doneSectionExpanded = false;
   renderNav();
@@ -2817,7 +2866,7 @@ function isStale(t) {
 // Meetings aren't tied to a desk or a payment kind, so a desk/payments
 // filter hides them entirely rather than showing an unfiltered leftover.
 function calFiltersActive() {
-  return !!(calFilterDesk || calFilterPaymentsOnly);
+  return !!(calFilterDesk || calFilterPaymentsOnly || calFilterTasksOnly);
 }
 function eventsForDate(dateStr) {
   const evs = [];
@@ -2825,6 +2874,7 @@ function eventsForDate(dateStr) {
     if (t.date !== dateStr) return;
     if (calFilterDesk && d.id !== calFilterDesk) return;
     if (calFilterPaymentsOnly && t.kind !== 'payment') return;
+    if (calFilterTasksOnly && t.kind !== 'task') return;
     evs.push({ type:'task', id:t.id, title:t.title, deskId:d.id, deskName:d.name, deskIcon:d.icon, deskBg:d.ic_bg, deskColor:d.ic_color, priority:effectivePriority(t), done:t.done, kind:t.kind, cost:t.cost });
   });
   if (!calFiltersActive()) {
@@ -2887,6 +2937,11 @@ function hideCalTooltip() {
 }
 
 function renderCalendarMain() {
+  // Any re-render tears down and rebuilds the chip elements, so a tooltip
+  // shown via mouseenter never gets its matching mouseleave (the node it
+  // was attached to is gone) — clear it explicitly instead of relying on
+  // that event.
+  hideCalTooltip();
   const monthNames = MONTH_NAMES;
   const first = new Date(calYear, calMonth, 1);
   const startDow = first.getDay();
@@ -2912,7 +2967,8 @@ function renderCalendarMain() {
 
   const unscheduled = allTasksFlat().filter(({t, d}) => !t.done && !t.date
     && (!calFilterDesk || d.id === calFilterDesk)
-    && (!calFilterPaymentsOnly || t.kind === 'payment'));
+    && (!calFilterPaymentsOnly || t.kind === 'payment')
+    && (!calFilterTasksOnly || t.kind === 'task'));
 
   let html = `
     <div class="desk-header">
@@ -2934,6 +2990,9 @@ function renderCalendarMain() {
       </select>
       <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text-2);cursor:pointer;user-select:none">
         <input type="checkbox" ${calFilterPaymentsOnly ? 'checked' : ''} onchange="toggleCalFilterPayments(this.checked)"> Payments only
+      </label>
+      <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text-2);cursor:pointer;user-select:none">
+        <input type="checkbox" ${calFilterTasksOnly ? 'checked' : ''} onchange="toggleCalFilterTasks(this.checked)"> Tasks only
       </label>
       ${calFiltersActive() ? `<button class="btn" onclick="clearCalFilters()">✕ Clear filter</button>` : ''}
     </div>
@@ -2977,11 +3036,18 @@ function setCalFilterDesk(val) {
 }
 function toggleCalFilterPayments(checked) {
   calFilterPaymentsOnly = checked;
+  if (checked) calFilterTasksOnly = false;
+  renderCalendarMain();
+}
+function toggleCalFilterTasks(checked) {
+  calFilterTasksOnly = checked;
+  if (checked) calFilterPaymentsOnly = false;
   renderCalendarMain();
 }
 function clearCalFilters() {
   calFilterDesk = null;
   calFilterPaymentsOnly = false;
+  calFilterTasksOnly = false;
   renderCalendarMain();
 }
 
@@ -3718,7 +3784,7 @@ function renderLinksMain() {
           </div>`;
       } else {
         html += `
-          <div class="task-card p4">
+          <div class="task-card p4" id="link-card-${l.id}">
             <div class="task-main">
               <div class="link-icon">${linkIcon(l.cat)}</div>
               <div class="task-body">
