@@ -2308,31 +2308,25 @@ function payablesRollup() {
 
 // Adjustable window for the Repayment Dashboard summary — scopes which
 // entries count toward the paid/outstanding meter, totals, pie, and
-// vendor bars, by due date. 'all' (the default) keeps every entry,
-// matching the summary's original behavior.
-let repaymentPeriod = 'all';
-const REPAYMENT_PERIODS = [
-  { key:'all',     label:'All time' },
-  { key:'week',    label:'This week' },
-  { key:'month',   label:'This month' },
-  { key:'quarter', label:'This quarter' },
-  { key:'year',    label:'This year' },
-];
-function setRepaymentPeriod(val) {
-  repaymentPeriod = val;
+// vendor bars, by due date. Empty start/end (the default) keeps every
+// entry, matching the summary's original behavior.
+let repaymentRangeStart = '';
+let repaymentRangeEnd = '';
+function setRepaymentRange(which, val) {
+  if (which === 'start') repaymentRangeStart = val;
+  else repaymentRangeEnd = val;
   renderDeskMain();
 }
-function periodRange(period) {
-  if (!period || period === 'all') return null;
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  let end;
-  if (period === 'week') end = new Date(start.getTime() + 7 * 86400000);
-  else if (period === 'month') end = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
-  else if (period === 'quarter') end = new Date(now.getFullYear(), now.getMonth() + 3, now.getDate());
-  else if (period === 'year') end = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
-  else return null;
-  return { start: fmtDate(start), end: fmtDate(end) };
+function clearRepaymentRange() {
+  repaymentRangeStart = '';
+  repaymentRangeEnd = '';
+  renderDeskMain();
+}
+// `active` just says "apply whatever range is currently set" — callers that
+// want an always-unfiltered list (e.g. the account datalist) pass nothing.
+function periodRange(active) {
+  if (!active || (!repaymentRangeStart && !repaymentRangeEnd)) return null;
+  return { start: repaymentRangeStart || '0000-01-01', end: repaymentRangeEnd || '9999-12-31' };
 }
 
 // Splits the Repayment Dashboard's own task list by payType — the same
@@ -2343,7 +2337,7 @@ function periodRange(period) {
 function tasksForPayType(deskId, type, period) {
   let list = (state.desks[deskId] || []).filter(t => (t.payType === 'loan') === (type === 'loan'));
   const range = periodRange(period);
-  if (range) list = list.filter(t => t.date && t.date >= range.start && t.date < range.end);
+  if (range) list = list.filter(t => t.date && t.date >= range.start && t.date <= range.end);
   return list;
 }
 
@@ -2456,9 +2450,8 @@ function renderRepaymentSummary(deskId, type, period) {
   const totalOutstanding = accounts.reduce((s, a) => s + a.outstanding, 0);
   const grandTotal = totalPaid + totalOutstanding;
   if (!grandTotal) {
-    if (period && period !== 'all') {
-      const periodLabel = (REPAYMENT_PERIODS.find(p => p.key === period) || {}).label || period;
-      return `<div class="empty-state" style="padding:20px"><div class="empty-text">Nothing due ${periodLabel.toLowerCase()} — try a wider period.</div></div>`;
+    if (period && (repaymentRangeStart || repaymentRangeEnd)) {
+      return `<div class="empty-state" style="padding:20px"><div class="empty-text">Nothing due in the selected date range — try widening it.</div></div>`;
     }
     return '';
   }
@@ -2792,24 +2785,29 @@ function renderDeskMain() {
     </div>
     ${isPay ? `<datalist id="account-datalist">${accountKnownNames(activeView).map(n => `<option value="${escHtml(n)}"></option>`).join('')}</datalist>` : ''}
     ${isPay ? `
-      <div class="desk-actions" style="margin-top:14px;margin-bottom:0">
+      <div class="desk-actions" style="margin-top:14px;margin-bottom:0;flex-wrap:wrap">
         <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2)">
-          Summary period:
-          <select class="add-priority-select" onchange="setRepaymentPeriod(this.value)">
-            ${REPAYMENT_PERIODS.map(p => `<option value="${p.key}" ${repaymentPeriod === p.key ? 'selected' : ''}>${p.label}</option>`).join('')}
-          </select>
+          From
+          <input type="date" class="add-input" style="flex:0 0 150px" value="${repaymentRangeStart}"
+            max="${repaymentRangeEnd || ''}" onchange="setRepaymentRange('start', this.value)">
         </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2)">
+          Until
+          <input type="date" class="add-input" style="flex:0 0 150px" value="${repaymentRangeEnd}"
+            min="${repaymentRangeStart || ''}" onchange="setRepaymentRange('end', this.value)">
+        </label>
+        ${(repaymentRangeStart || repaymentRangeEnd) ? `<button class="btn" style="font-size:11px;padding:4px 8px" onclick="clearRepaymentRange()">Clear</button>` : ''}
       </div>
       <div class="section-divider" style="margin-top:14px">
         <span class="section-divider-label" style="font-size:12px;font-weight:700">🧾 Payables summary</span>
         <div class="section-divider-line"></div>
       </div>
-      ${renderRepaymentSummary(activeView, 'payable', repaymentPeriod)}
+      ${renderRepaymentSummary(activeView, 'payable', true)}
       <div class="section-divider" style="margin-top:14px">
         <span class="section-divider-label" style="font-size:12px;font-weight:700">🏦 Loans summary</span>
         <div class="section-divider-line"></div>
       </div>
-      ${renderRepaymentSummary(activeView, 'loan', repaymentPeriod)}
+      ${renderRepaymentSummary(activeView, 'loan', true)}
     ` : ''}
 
     <div class="tasks-list" id="tasks-list">`;
