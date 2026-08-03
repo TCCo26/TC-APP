@@ -1539,6 +1539,12 @@ function normalizeTask(t) {
   // needing two separate desks. Defaults to 'payable' since that's the more
   // common case and matches how the desk behaved before payType existed.
   if (t.payType === undefined) t.payType = 'payable';
+  // How much of `cost` has actually been paid so far — independent of
+  // `done`, since a payment can be partially settled without the line
+  // being considered fully resolved. Legacy tasks default to the full
+  // cost if already marked done (matches the old done-binary behavior),
+  // otherwise 0.
+  if (t.paidAmount === undefined) t.paidAmount = t.done ? (t.cost || 0) : 0;
   // Legacy tasks (saved before this field existed) default to today rather
   // than an unknown past date, so they don't immediately show as stale.
   if (t.createdAt === undefined) t.createdAt = fmtDate(new Date());
@@ -2282,21 +2288,63 @@ function renderMorningChecklist() {
     </div>`;
 }
 
+// What's actually still owed on a task — cost minus whatever's already
+// been paid toward it, not the full cost, so a partially-paid invoice
+// doesn't overstate what's outstanding.
+function remainingCost(t) {
+  if (typeof t.cost !== 'number') return 0;
+  return Math.max(0, t.cost - Math.min(t.paidAmount || 0, t.cost));
+}
+
 function payablesRollup() {
   const today = fmtDate(new Date());
   const weekEnd = fmtDate(new Date(Date.now() + 7 * 86400000));
   const open = PAYMENT_DESKS.flatMap(id => state.desks[id] || []).filter(t => !t.done && t.kind === 'payment' && typeof t.cost === 'number');
-  const total = open.reduce((sum, t) => sum + t.cost, 0);
-  const overdue = open.filter(t => t.date && t.date < today).reduce((sum, t) => sum + t.cost, 0);
-  const dueThisWeek = open.filter(t => t.date && t.date >= today && t.date <= weekEnd).reduce((sum, t) => sum + t.cost, 0);
+  const total = open.reduce((sum, t) => sum + remainingCost(t), 0);
+  const overdue = open.filter(t => t.date && t.date < today).reduce((sum, t) => sum + remainingCost(t), 0);
+  const dueThisWeek = open.filter(t => t.date && t.date >= today && t.date <= weekEnd).reduce((sum, t) => sum + remainingCost(t), 0);
   return { total, overdue, dueThisWeek, count: open.length };
+}
+
+// Adjustable window for the Repayment Dashboard summary — scopes which
+// entries count toward the paid/outstanding meter, totals, pie, and
+// vendor bars, by due date. 'all' (the default) keeps every entry,
+// matching the summary's original behavior.
+let repaymentPeriod = 'all';
+const REPAYMENT_PERIODS = [
+  { key:'all',     label:'All time' },
+  { key:'week',    label:'This week' },
+  { key:'month',   label:'This month' },
+  { key:'quarter', label:'This quarter' },
+  { key:'year',    label:'This year' },
+];
+function setRepaymentPeriod(val) {
+  repaymentPeriod = val;
+  renderDeskMain();
+}
+function periodRange(period) {
+  if (!period || period === 'all') return null;
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  let end;
+  if (period === 'week') end = new Date(start.getTime() + 7 * 86400000);
+  else if (period === 'month') end = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
+  else if (period === 'quarter') end = new Date(now.getFullYear(), now.getMonth() + 3, now.getDate());
+  else if (period === 'year') end = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
+  else return null;
+  return { start: fmtDate(start), end: fmtDate(end) };
 }
 
 // Splits the Repayment Dashboard's own task list by payType — the same
 // desk, divided into a Loans section and a Payables section, instead of two
-// separate desks.
-function tasksForPayType(deskId, type) {
-  return (state.desks[deskId] || []).filter(t => (t.payType === 'loan') === (type === 'loan'));
+// separate desks. `period`, when given, additionally restricts to entries
+// due within that window — undated entries drop out of any period narrower
+// than "all time" since there's no date to place them by.
+function tasksForPayType(deskId, type, period) {
+  let list = (state.desks[deskId] || []).filter(t => (t.payType === 'loan') === (type === 'loan'));
+  const range = periodRange(period);
+  if (range) list = list.filter(t => t.date && t.date >= range.start && t.date < range.end);
+  return list;
 }
 
 // Groups a Repayment Dashboard section (loans or payables) by account
@@ -2316,29 +2364,22 @@ function accountKnownNames(deskId, type) {
   });
   return [...seen.values()].sort();
 }
-function repaymentByAccount(deskId, type) {
-  const items = tasksForPayType(deskId, type).filter(t => typeof t.cost === 'number' && t.cost > 0);
+// paid/outstanding come from paidAmount now, not the done flag — a task can
+// be partially paid (e.g. P40,000 of a P74,320 invoice) without being fully
+// resolved, so the split has to reflect the actual amount paid rather than
+// an all-or-nothing read of `done`.
+function repaymentByAccount(deskId, type, period) {
+  const items = tasksForPayType(deskId, type, period).filter(t => typeof t.cost === 'number' && t.cost > 0);
   const groups = {};
   items.forEach(t => {
     const label = (t.account || t.title).trim();
     const key = label.toLowerCase();
     if (!groups[key]) groups[key] = { account: label, paid: 0, outstanding: 0 };
-    if (t.done) groups[key].paid += t.cost;
-    else groups[key].outstanding += t.cost;
+    const paidAmt = Math.max(0, Math.min(t.paidAmount || 0, t.cost));
+    groups[key].paid += paidAmt;
+    groups[key].outstanding += t.cost - paidAmt;
   });
   return Object.values(groups).sort((a, b) => (b.paid + b.outstanding) - (a.paid + a.outstanding));
-}
-
-// Due-this-week / due-this-month totals for one payType section's still-open
-// entries — the weekly figure is a subset of the monthly one.
-function repaymentPeriodStats(deskId, type) {
-  const today = fmtDate(new Date());
-  const weekEnd = fmtDate(new Date(Date.now() + 7 * 86400000));
-  const monthEnd = fmtDate(new Date(Date.now() + 30 * 86400000));
-  const open = tasksForPayType(deskId, type).filter(t => !t.done && typeof t.cost === 'number');
-  const dueThisWeek = open.filter(t => t.date && t.date >= today && t.date <= weekEnd).reduce((s, t) => s + t.cost, 0);
-  const dueThisMonth = open.filter(t => t.date && t.date >= today && t.date <= monthEnd).reduce((s, t) => s + t.cost, 0);
-  return { dueThisWeek, dueThisMonth };
 }
 
 // Categorical palette for the vendor/lender share pie — validated (adjacent
@@ -2409,18 +2450,23 @@ function pieLegendHTML(slices) {
 // Dashboard — each gets its own paid-vs-outstanding picture instead of one
 // combined chart, since a loan balance and a vendor payable roll up very
 // differently. Returns '' when that section has nothing to chart yet.
-function renderRepaymentSummary(deskId, type) {
-  const accounts = repaymentByAccount(deskId, type);
+function renderRepaymentSummary(deskId, type, period) {
+  const accounts = repaymentByAccount(deskId, type, period);
   const totalPaid = accounts.reduce((s, a) => s + a.paid, 0);
   const totalOutstanding = accounts.reduce((s, a) => s + a.outstanding, 0);
   const grandTotal = totalPaid + totalOutstanding;
-  if (!grandTotal) return '';
+  if (!grandTotal) {
+    if (period && period !== 'all') {
+      const periodLabel = (REPAYMENT_PERIODS.find(p => p.key === period) || {}).label || period;
+      return `<div class="empty-state" style="padding:20px"><div class="empty-text">Nothing due ${periodLabel.toLowerCase()} — try a wider period.</div></div>`;
+    }
+    return '';
+  }
 
   const pct = Math.round((totalPaid / grandTotal) * 100);
   const byLabel = type === 'loan' ? 'By lender — paid vs owed' : 'By vendor — paid vs owed';
   const shareLabel = type === 'loan' ? 'Share of total — by lender' : 'Share of total — by vendor';
   const pieSlices = pieSlicesFromAccounts(accounts);
-  const period = repaymentPeriodStats(deskId, type);
 
   const accountBarsHtml = accounts.map(a => {
     const rowTotal = a.paid + a.outstanding;
@@ -2445,7 +2491,6 @@ function renderRepaymentSummary(deskId, type) {
           <div class="prod-meter-value">${pct}%</div>
         </div>
         <div class="prod-card-sub">${fmtCost(totalPaid)} paid of ${fmtCost(grandTotal)} tracked</div>
-        <div class="prod-card-sub">${fmtCost(period.dueThisWeek)} due this week · ${fmtCost(period.dueThisMonth)} due this month</div>
       </div>
       <div class="prod-card">
         <div class="prod-card-title">Totals</div>
@@ -2493,7 +2538,7 @@ function buildDailyBriefText() {
   const rollup = payablesRollup();
   const payDue = PAYMENT_DESKS.flatMap(id => state.desks[id] || []).filter(t => !t.done && t.kind === 'payment' && t.date && t.date <= today);
   lines.push('', `PAYABLES & LOANS — ${fmtCost(rollup.total)} outstanding, ${fmtCost(rollup.overdue)} overdue`);
-  lines.push(...(payDue.length ? payDue.map(t => `  • ${t.title}${typeof t.cost === 'number' ? ' — ' + fmtCost(t.cost) : ''}`) : ['  Nothing due or overdue today.']));
+  lines.push(...(payDue.length ? payDue.map(t => `  • ${t.title}${typeof t.cost === 'number' ? ' — ' + fmtCost(remainingCost(t)) + (t.paidAmount > 0 ? ` (of ${fmtCost(t.cost)})` : '') : ''}`) : ['  Nothing due or overdue today.']));
 
   const meetingsToday = (state.meetings || []).filter(m => m.date === today).sort((a, b) => (a.time || '').localeCompare(b.time || ''));
   lines.push('', `MEETINGS TODAY (${meetingsToday.length})`);
@@ -2747,16 +2792,24 @@ function renderDeskMain() {
     </div>
     ${isPay ? `<datalist id="account-datalist">${accountKnownNames(activeView).map(n => `<option value="${escHtml(n)}"></option>`).join('')}</datalist>` : ''}
     ${isPay ? `
+      <div class="desk-actions" style="margin-top:14px;margin-bottom:0">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2)">
+          Summary period:
+          <select class="add-priority-select" onchange="setRepaymentPeriod(this.value)">
+            ${REPAYMENT_PERIODS.map(p => `<option value="${p.key}" ${repaymentPeriod === p.key ? 'selected' : ''}>${p.label}</option>`).join('')}
+          </select>
+        </label>
+      </div>
       <div class="section-divider" style="margin-top:14px">
         <span class="section-divider-label" style="font-size:12px;font-weight:700">🧾 Payables summary</span>
         <div class="section-divider-line"></div>
       </div>
-      ${renderRepaymentSummary(activeView, 'payable')}
+      ${renderRepaymentSummary(activeView, 'payable', repaymentPeriod)}
       <div class="section-divider" style="margin-top:14px">
         <span class="section-divider-label" style="font-size:12px;font-weight:700">🏦 Loans summary</span>
         <div class="section-divider-line"></div>
       </div>
-      ${renderRepaymentSummary(activeView, 'loan')}
+      ${renderRepaymentSummary(activeView, 'loan', repaymentPeriod)}
     ` : ''}
 
     <div class="tasks-list" id="tasks-list">`;
@@ -2802,6 +2855,10 @@ function taskCardHTML(t) {
         <div class="task-controls">
           <button class="status-btn ${t.status}" onclick="cycleStatus('${t.id}')" title="Click to change status">${STATUS_LABELS[t.status]}</button>
           ${isPaymentDesk(activeView) ? `<input type="number" class="date-input" style="width:100px" min="0" step="0.01" placeholder="Amount ₱" value="${t.cost !== null && t.cost !== undefined ? t.cost : ''}" onchange="updateTaskCost('${t.id}', this.value)" title="Total amount for this payment">` : ''}
+          ${isPaymentDesk(activeView) ? `<span style="display:inline-flex;align-items:center;gap:3px">
+            <input type="number" class="date-input" style="width:100px" min="0" step="0.01" placeholder="Paid ₱" value="${t.paidAmount ? t.paidAmount : ''}" onchange="updateTaskPaidAmount('${t.id}', this.value)" title="Amount already paid toward this — leave blank if nothing paid yet">
+            ${(typeof t.cost === 'number' && t.cost > 0 && t.paidAmount > 0 && t.paidAmount < t.cost) ? `<span style="font-size:10px;color:var(--muted);white-space:nowrap">${Math.round(t.paidAmount / t.cost * 100)}%</span>` : ''}
+          </span>` : ''}
           ${isPaymentDesk(activeView) ? `<input type="text" class="date-input" style="width:130px" list="account-datalist" placeholder="Person/company" value="${escHtml(t.account || '')}" onchange="updateTaskAccount('${t.id}', this.value)" title="Who this payment is owed to">` : ''}
           ${isPaymentDesk(activeView) ? `<select class="priority-btn priority-select" onchange="updateTaskPayType('${t.id}', this.value)" title="Loan or payable?">
             <option value="payable" ${t.payType !== 'loan' ? 'selected' : ''}>Payable</option>
@@ -2888,6 +2945,13 @@ function eventsForDate(dateStr) {
 function deskChipStyle(bg, color) {
   return `background:${bg};color:${color};border-color:${color}`;
 }
+// Completed calendar chips go green regardless of their desk's own color —
+// the strikethrough already says "done," pairing it with a status color
+// (rather than staying in the desk's own hue) makes it readable at a glance
+// across a full month instead of needing to check text for each chip.
+function doneChipStyle() {
+  return `background:var(--green-bg);color:var(--green);border-color:var(--green)`;
+}
 
 function taskTooltipText(title, deskName, kind, cost, priority, done) {
   const lines = [title, deskName];
@@ -2958,7 +3022,7 @@ function renderCalendarMain() {
         <div class="cal-daynum">${day}</div>
         <div class="cal-chips">
           ${evs.map(e => e.type==='task'
-            ? `<div class="cal-chip task ${e.done ? 'done' : ''}" style="${deskChipStyle(e.deskBg, e.deskColor)}" ${e.done ? '' : `draggable="true" ondragstart="dragStart(event,'task','${e.id}')"`} onclick="switchView('${e.deskId}')" onmouseenter="showCalTooltip(event)" onmouseleave="hideCalTooltip()" data-tt="${escHtml(taskTooltipText(e.title, e.deskName, e.kind, e.cost, e.priority, e.done))}"><span>${e.deskIcon} ${e.kind === 'payment' && e.cost ? fmtCost(e.cost) + ' · ' : ''}${escHtml(e.title)}</span></div>`
+            ? `<div class="cal-chip task ${e.done ? 'done' : ''}" style="${e.done ? doneChipStyle() : deskChipStyle(e.deskBg, e.deskColor)}" ${e.done ? '' : `draggable="true" ondragstart="dragStart(event,'task','${e.id}')"`} onclick="switchView('${e.deskId}')" onmouseenter="showCalTooltip(event)" onmouseleave="hideCalTooltip()" data-tt="${escHtml(taskTooltipText(e.title, e.deskName, e.kind, e.cost, e.priority, e.done))}"><span>${e.deskIcon} ${e.kind === 'payment' && e.cost ? fmtCost(e.cost) + ' · ' : ''}${escHtml(e.title)}</span></div>`
             : `<div class="cal-chip meeting" draggable="true" ondragstart="dragStart(event,'meeting','${e.id}')" onmouseenter="showCalTooltip(event)" onmouseleave="hideCalTooltip()" data-tt="${escHtml(meetingTooltipText(e.title, e.time, dateStr))}"><span>🕐 ${e.time ? e.time + ' · ' : ''}${escHtml(e.title)}</span><span class="chip-del" onclick="event.stopPropagation();deleteMeeting('${e.id}')">✕</span></div>`
           ).join('')}
         </div>
@@ -3918,7 +3982,23 @@ function updateTaskPriority(id, priority) {
 
 function updateTaskCost(id, val) {
   const t = findTask(id);
-  if (t) { const n = parseFloat(val); t.cost = isNaN(n) ? null : n; saveState(); renderAll(); }
+  if (!t) return;
+  const n = parseFloat(val);
+  t.cost = isNaN(n) ? null : n;
+  // Keep paidAmount from silently exceeding a lowered total.
+  if (typeof t.cost === 'number' && t.paidAmount > t.cost) t.paidAmount = t.cost;
+  saveState(); renderAll();
+}
+
+// Tracks partial payments — how much of `cost` has actually been paid,
+// separate from the `done` flag (a line can be half-paid and still open).
+function updateTaskPaidAmount(id, val) {
+  const t = findTask(id);
+  if (!t) return;
+  const n = parseFloat(val);
+  const cap = typeof t.cost === 'number' ? t.cost : Infinity;
+  t.paidAmount = isNaN(n) ? 0 : Math.max(0, Math.min(n, cap));
+  saveState(); renderAll();
 }
 
 function updateTaskAccount(id, val) {
