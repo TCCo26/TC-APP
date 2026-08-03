@@ -1335,6 +1335,33 @@ body.rail-collapsed .main { margin-left: 0; }
 ::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+
+/* ── PRINT (Calendar → Print button / Ctrl+P) ── */
+/* Only meaningful on the Calendar page — that's the only view with a Print
+   button — but scoped generically so printing from any other page just
+   quietly hides the same chrome rather than doing something page-specific. */
+.print-only-title { display: none; }
+@media print {
+  .rail, .rail-backdrop, .topbar, .hamburger-btn, #modal-root,
+  #cal-chip-tooltip, #app-toast, .no-print, .chip-del {
+    display: none !important;
+  }
+  body { background: #fff; }
+  .shell { display: block; }
+  .main { margin-left: 0; padding: 0; }
+  .desk-header { margin-bottom: 4px; }
+  .print-only-title { display: block; font-size: 16px; font-weight: 700; margin-bottom: 10px; }
+  .cal-scroll { overflow: visible; margin: 0; padding: 0; }
+  .cal-dow, .cal-grid { min-width: 0 !important; }
+  .cal-cell {
+    aspect-ratio: auto; min-height: 90px; overflow: visible;
+    break-inside: avoid;
+  }
+  .cal-chips { overflow-y: visible; }
+  .cal-chip, .cal-cell.today {
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+}
 </style>
 </head>
 <body>
@@ -3121,21 +3148,23 @@ function renderCalendarMain() {
     <div class="desk-header">
       <div class="desk-title-area">
         <div class="desk-title">🗓️ Calendar</div>
-        <div class="desk-desc">Drag any task or meeting onto a date to schedule or reschedule it. Shift-click chips to select several, then drag any of them to move the whole group.</div>
+        <div class="desk-desc no-print">Drag any task or meeting onto a date to schedule or reschedule it. Shift-click chips to select several, then drag any of them to move the whole group.</div>
       </div>
       <div class="desk-actions">
-        <button class="btn" onclick="shiftMonth(-1)">‹ Prev</button>
+        <button class="btn no-print" onclick="shiftMonth(-1)">‹ Prev</button>
         <div style="font-size:13px;font-weight:600;padding:0 6px;display:flex;align-items:center;min-width:130px;justify-content:center">${monthNames[calMonth]} ${calYear}</div>
-        <button class="btn" onclick="shiftMonth(1)">Next ›</button>
+        <button class="btn no-print" onclick="shiftMonth(1)">Next ›</button>
+        <button class="btn no-print" onclick="window.print()" title="Print this month, or save it as a PDF">🖨️ Print</button>
       </div>
     </div>
+    <div class="print-only-title">Qualitech Philippines</div>
     ${calSelected.size > 0 ? `
-    <div class="desk-actions" style="margin-bottom:12px;background:var(--accent-bg,#eef2ff);border-radius:8px;padding:8px 12px">
+    <div class="desk-actions no-print" style="margin-bottom:12px;background:var(--accent-bg,#eef2ff);border-radius:8px;padding:8px 12px">
       <span style="font-size:12px;font-weight:600;color:var(--text-2)">${calSelected.size} selected — drag any highlighted chip to move them together</span>
       <button class="btn" style="font-size:11px;padding:4px 8px" onclick="calSelected.clear();renderCalendarMain()">✕ Clear selection</button>
     </div>` : ''}
 
-    <div class="desk-actions" style="flex-wrap:wrap;margin-bottom:12px">
+    <div class="desk-actions no-print" style="flex-wrap:wrap;margin-bottom:12px">
       <select class="add-priority-select" onchange="setCalFilterDesk(this.value)">
         <option value="" ${!calFilterDesk ? 'selected' : ''}>All desks</option>
         ${DESKS.map(d => `<option value="${d.id}" ${calFilterDesk === d.id ? 'selected' : ''}>${d.icon} ${d.name}</option>`).join('')}
@@ -3149,11 +3178,11 @@ function renderCalendarMain() {
       ${calFiltersActive() ? `<button class="btn" onclick="clearCalFilters()">✕ Clear filter</button>` : ''}
     </div>
 
-    <div class="section-divider">
+    <div class="section-divider no-print">
       <span class="section-divider-label">Add a meeting</span>
       <div class="section-divider-line"></div>
     </div>
-    <div class="add-task-area" style="cursor:default">
+    <div class="add-task-area no-print" style="cursor:default">
       <input class="add-input" id="mtg-title" placeholder="Meeting title…" style="flex:2">
       <input type="date" class="date-input" id="mtg-date" value="${fmtDate(new Date(calYear, calMonth, Math.min(new Date().getDate(), daysInMonth)))}">
       <input type="time" class="date-input" id="mtg-time">
@@ -3161,11 +3190,11 @@ function renderCalendarMain() {
       <button class="btn" onclick="openMeetingsBulkAddModal()">＋ Bulk add</button>
     </div>
 
-    <div class="section-divider">
+    <div class="section-divider no-print">
       <span class="section-divider-label">Unscheduled tasks — drag onto a date</span>
       <div class="section-divider-line"></div>
     </div>
-    <div class="unscheduled-tray">
+    <div class="unscheduled-tray no-print">
       ${unscheduled.length === 0
         ? `<span style="font-size:12px;color:var(--muted)">Everything's scheduled.</span>`
         : unscheduled.map(({t,d}) => `<div class="cal-chip task" style="${deskChipStyle(d.ic_bg, d.ic_color)}" draggable="true" ondragstart="dragStart(event,'task','${t.id}')" onclick="switchView('${d.id}')" onmouseenter="showCalTooltip(event)" onmouseleave="hideCalTooltip()" data-tt="${escHtml(taskTooltipText(t.title, d.name, t.kind, t.cost, effectivePriority(t), t.done))}"><span>${d.icon} ${t.kind === 'payment' && t.cost ? fmtCost(t.cost) + ' · ' : ''}${escHtml(t.title)}</span></div>`).join('')}
