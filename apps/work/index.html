@@ -1127,6 +1127,9 @@ body.rail-collapsed .main { margin-left: 0; }
    desk pages and the top KPI strip, so the calendar's job is "which desk". */
 .cal-chip.meeting { background: #EEEDFE; color: #534AB7; border-color: #D6D3FB; }
 .cal-chip.task.done { text-decoration: line-through; opacity: 0.6; cursor: default; }
+/* Shift-click multi-select for calendar chips — a ring rather than a color
+   swap, so the chip's own desk/meeting/done color stays legible underneath. */
+.cal-chip.selected { box-shadow: 0 0 0 2px var(--accent, #4f46e5); }
 .chip-del { cursor: pointer; opacity: 0.6; flex-shrink: 0; }
 .chip-del:hover { opacity: 1; }
 #cal-chip-tooltip {
@@ -1251,6 +1254,8 @@ body.rail-collapsed .main { margin-left: 0; }
   flex-shrink: 0;
 }
 .topbar-icon-btn:hover { background: rgba(255,255,255,0.16); }
+.topbar-icon-btn:disabled { opacity: 0.35; cursor: default; }
+.topbar-icon-btn:disabled:hover { background: rgba(255,255,255,0.08); }
 
 .rail-backdrop { display: none; }
 
@@ -1352,6 +1357,7 @@ body.rail-collapsed .main { margin-left: 0; }
       </div>
     </div>
     <div style="display:flex;align-items:center;gap:14px">
+      <button class="topbar-icon-btn" id="undo-btn" onclick="undoLastChange()" aria-label="Undo last change" title="Undo last change (Ctrl+Z)" disabled>⟲</button>
       <button class="topbar-icon-btn" onclick="openSearchModal()" aria-label="Search tasks" title="Search tasks (/)">🔎</button>
       <div class="topbar-date" id="topbar-date"></div>
     </div>
@@ -1626,7 +1632,70 @@ function loadState() {
   return freshDefaultState();
 }
 
+// Undo stack — a snapshot of state as it was just before each change, so
+// "Undo" can restore it. Rapid-fire saves (e.g. every keystroke while typing
+// into a task field) are coalesced into a single snapshot: as long as saves
+// keep arriving within UNDO_COALESCE_MS of each other, only the state from
+// before the *first* one is kept, so one Undo press reverts the whole typing
+// burst instead of one character at a time. Discrete actions (delete a task,
+// drag a chip to a new date, mark done) are rarely that close together, so
+// they naturally end up as their own undo step.
+const UNDO_LIMIT = 30;
+const UNDO_COALESCE_MS = 1500;
+let undoStack = [];
+let undoCoalesceTimer = null;
+
+function pushUndoSnapshot(prevRaw) {
+  if (undoCoalesceTimer) {
+    clearTimeout(undoCoalesceTimer);
+  } else {
+    undoStack.push(prevRaw);
+    if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+  }
+  undoCoalesceTimer = setTimeout(() => { undoCoalesceTimer = null; }, UNDO_COALESCE_MS);
+  updateUndoButton();
+}
+
+function undoLastChange() {
+  if (!undoStack.length) return;
+  clearTimeout(undoCoalesceTimer);
+  undoCoalesceTimer = null;
+  const prevRaw = undoStack.pop();
+  state = JSON.parse(prevRaw);
+  localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  scheduleCloudSync();
+  renderAll();
+  updateUndoButton();
+  showToast('Undid last change');
+}
+
+function updateUndoButton() {
+  const btn = document.getElementById('undo-btn');
+  if (!btn) return;
+  btn.disabled = undoStack.length === 0;
+}
+
+function showToast(message) {
+  const existing = document.getElementById('app-toast');
+  if (existing) existing.remove();
+  const el = document.createElement('div');
+  el.id = 'app-toast';
+  el.textContent = message;
+  el.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);' +
+    'background:var(--ink,#1a1d23);color:#fff;padding:10px 18px;border-radius:8px;' +
+    'font-size:13px;font-weight:600;box-shadow:0 4px 16px rgba(0,0,0,.25);z-index:9999;' +
+    'opacity:0;transition:opacity .15s ease';
+  document.body.appendChild(el);
+  requestAnimationFrame(() => { el.style.opacity = '1'; });
+  setTimeout(() => {
+    el.style.opacity = '0';
+    setTimeout(() => el.remove(), 200);
+  }, 2200);
+}
+
 function saveState() {
+  const prevRaw = localStorage.getItem(STORE_KEY);
+  if (prevRaw) pushUndoSnapshot(prevRaw);
   localStorage.setItem(STORE_KEY, JSON.stringify(state));
   scheduleCloudSync();
 }
@@ -1638,6 +1707,11 @@ let calMonth = new Date().getMonth();
 let calFilterDesk = null;          // null = all desks
 let calFilterPaymentsOnly = false;
 let calFilterTasksOnly = false;
+// Shift-click-selected calendar chips ("type:id" keys), for dragging several
+// tasks/meetings to a new date in one move. Cleared on month/filter changes
+// and on leaving the calendar so a stale selection can't silently apply to
+// items it was never meant to.
+let calSelected = new Set();
 let currentNoteId = null;          // id of the note entry currently open in the editor
 let notesFilterDesk = null;        // null = all desks
 let notesSearchQuery = '';
@@ -1964,6 +2038,16 @@ document.addEventListener('keydown', (e) => {
     openSearchModal();
     return;
   }
+  // Ctrl/Cmd+Z triggers the app-level undo — but only when focus isn't in a
+  // text field, so it doesn't fight with the browser's normal per-field undo
+  // while editing a task title, note, etc.
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+    const tag = (e.target && e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || (e.target && e.target.isContentEditable)) return;
+    e.preventDefault();
+    undoLastChange();
+    return;
+  }
   if (e.key !== '/') return;
   const tag = (e.target && e.target.tagName || '').toLowerCase();
   if (tag === 'input' || tag === 'textarea' || (e.target && e.target.isContentEditable)) return;
@@ -2094,6 +2178,7 @@ function renderNav() {
 
 function switchView(id) {
   hideCalTooltip();
+  calSelected.clear();
   activeView = id;
   doneSectionExpanded = false;
   renderNav();
@@ -3020,8 +3105,8 @@ function renderCalendarMain() {
         <div class="cal-daynum">${day}</div>
         <div class="cal-chips">
           ${evs.map(e => e.type==='task'
-            ? `<div class="cal-chip task ${e.done ? 'done' : ''}" style="${e.done ? doneChipStyle() : deskChipStyle(e.deskBg, e.deskColor)}" ${e.done ? '' : `draggable="true" ondragstart="dragStart(event,'task','${e.id}')"`} onclick="switchView('${e.deskId}')" onmouseenter="showCalTooltip(event)" onmouseleave="hideCalTooltip()" data-tt="${escHtml(taskTooltipText(e.title, e.deskName, e.kind, e.cost, e.priority, e.done))}"><span>${e.deskIcon} ${e.kind === 'payment' && e.cost ? fmtCost(e.cost) + ' · ' : ''}${escHtml(e.title)}</span></div>`
-            : `<div class="cal-chip meeting" draggable="true" ondragstart="dragStart(event,'meeting','${e.id}')" onmouseenter="showCalTooltip(event)" onmouseleave="hideCalTooltip()" data-tt="${escHtml(meetingTooltipText(e.title, e.time, dateStr))}"><span>🕐 ${e.time ? e.time + ' · ' : ''}${escHtml(e.title)}</span><span class="chip-del" onclick="event.stopPropagation();deleteMeeting('${e.id}')">✕</span></div>`
+            ? `<div class="cal-chip task ${e.done ? 'done' : ''} ${calSelected.has('task:'+e.id) ? 'selected' : ''}" style="${e.done ? doneChipStyle() : deskChipStyle(e.deskBg, e.deskColor)}" ${e.done ? '' : `draggable="true" ondragstart="dragStart(event,'task','${e.id}')"`} onclick="handleChipClick(event,'task','${e.id}','${e.deskId}')" onmouseenter="showCalTooltip(event)" onmouseleave="hideCalTooltip()" data-tt="${escHtml(taskTooltipText(e.title, e.deskName, e.kind, e.cost, e.priority, e.done))}"><span>${e.deskIcon} ${e.kind === 'payment' && e.cost ? fmtCost(e.cost) + ' · ' : ''}${escHtml(e.title)}</span></div>`
+            : `<div class="cal-chip meeting ${calSelected.has('meeting:'+e.id) ? 'selected' : ''}" draggable="true" ondragstart="dragStart(event,'meeting','${e.id}')" onclick="handleChipClick(event,'meeting','${e.id}',null)" onmouseenter="showCalTooltip(event)" onmouseleave="hideCalTooltip()" data-tt="${escHtml(meetingTooltipText(e.title, e.time, dateStr))}"><span>🕐 ${e.time ? e.time + ' · ' : ''}${escHtml(e.title)}</span><span class="chip-del" onclick="event.stopPropagation();deleteMeeting('${e.id}')">✕</span></div>`
           ).join('')}
         </div>
       </div>`;
@@ -3036,7 +3121,7 @@ function renderCalendarMain() {
     <div class="desk-header">
       <div class="desk-title-area">
         <div class="desk-title">🗓️ Calendar</div>
-        <div class="desk-desc">Drag any task or meeting onto a date to schedule or reschedule it.</div>
+        <div class="desk-desc">Drag any task or meeting onto a date to schedule or reschedule it. Shift-click chips to select several, then drag any of them to move the whole group.</div>
       </div>
       <div class="desk-actions">
         <button class="btn" onclick="shiftMonth(-1)">‹ Prev</button>
@@ -3044,6 +3129,11 @@ function renderCalendarMain() {
         <button class="btn" onclick="shiftMonth(1)">Next ›</button>
       </div>
     </div>
+    ${calSelected.size > 0 ? `
+    <div class="desk-actions" style="margin-bottom:12px;background:var(--accent-bg,#eef2ff);border-radius:8px;padding:8px 12px">
+      <span style="font-size:12px;font-weight:600;color:var(--text-2)">${calSelected.size} selected — drag any highlighted chip to move them together</span>
+      <button class="btn" style="font-size:11px;padding:4px 8px" onclick="calSelected.clear();renderCalendarMain()">✕ Clear selection</button>
+    </div>` : ''}
 
     <div class="desk-actions" style="flex-wrap:wrap;margin-bottom:12px">
       <select class="add-priority-select" onchange="setCalFilterDesk(this.value)">
@@ -3094,22 +3184,26 @@ function renderCalendarMain() {
 
 function setCalFilterDesk(val) {
   calFilterDesk = val || null;
+  calSelected.clear();
   renderCalendarMain();
 }
 function toggleCalFilterPayments(checked) {
   calFilterPaymentsOnly = checked;
   if (checked) calFilterTasksOnly = false;
+  calSelected.clear();
   renderCalendarMain();
 }
 function toggleCalFilterTasks(checked) {
   calFilterTasksOnly = checked;
   if (checked) calFilterPaymentsOnly = false;
+  calSelected.clear();
   renderCalendarMain();
 }
 function clearCalFilters() {
   calFilterDesk = null;
   calFilterPaymentsOnly = false;
   calFilterTasksOnly = false;
+  calSelected.clear();
   renderCalendarMain();
 }
 
@@ -3117,24 +3211,58 @@ function shiftMonth(delta) {
   calMonth += delta;
   if (calMonth < 0) { calMonth = 11; calYear--; }
   if (calMonth > 11) { calMonth = 0; calYear++; }
+  calSelected.clear();
   renderCalendarMain();
 }
 
+// Shift-click toggles a chip in/out of the multi-drag selection instead of
+// navigating/deleting. A plain click clears any active selection first, so
+// stray leftover selections don't silently ride along on the next drag.
+function handleChipClick(ev, type, id, deskId) {
+  if (ev.shiftKey) {
+    ev.stopPropagation();
+    toggleCalSelection(type, id);
+    return;
+  }
+  const hadSelection = calSelected.size > 0;
+  calSelected.clear();
+  if (type === 'task') { switchView(deskId); return; }
+  if (hadSelection) renderCalendarMain();
+}
+function toggleCalSelection(type, id) {
+  const key = type + ':' + id;
+  if (calSelected.has(key)) calSelected.delete(key); else calSelected.add(key);
+  renderCalendarMain();
+}
+
+// Dragging a chip that's part of a multi-item selection carries the whole
+// selection along; dragging any other chip (or a lone-selected one) behaves
+// as a normal single-item drag.
 function dragStart(ev, type, id) {
-  ev.dataTransfer.setData('text/plain', JSON.stringify({type, id}));
+  const key = type + ':' + id;
+  const items = (calSelected.has(key) && calSelected.size > 1)
+    ? [...calSelected].map(k => { const i = k.indexOf(':'); return { type: k.slice(0, i), id: k.slice(i + 1) }; })
+    : [{ type, id }];
+  ev.dataTransfer.setData('text/plain', JSON.stringify(items));
 }
 
 function handleCalDrop(ev, dateStr) {
   ev.preventDefault();
-  let data;
-  try { data = JSON.parse(ev.dataTransfer.getData('text/plain')); } catch(e) { return; }
-  if (data.type === 'task') {
-    const t = findTask(data.id);
-    if (t) { t.date = dateStr; saveState(); }
-  } else if (data.type === 'meeting') {
-    const m = (state.meetings || []).find(m => m.id === data.id);
-    if (m) { m.date = dateStr; saveState(); }
-  }
+  let items;
+  try { items = JSON.parse(ev.dataTransfer.getData('text/plain')); } catch(e) { return; }
+  if (!Array.isArray(items)) return;
+  let moved = false;
+  items.forEach(data => {
+    if (data.type === 'task') {
+      const t = findTask(data.id);
+      if (t) { t.date = dateStr; moved = true; }
+    } else if (data.type === 'meeting') {
+      const m = (state.meetings || []).find(m => m.id === data.id);
+      if (m) { m.date = dateStr; moved = true; }
+    }
+  });
+  if (moved) saveState();
+  calSelected.clear();
   // Rescheduling a task can flip its effective priority (e.g. onto/off a
   // past date), which the top KPI strip and sidebar badges need to reflect.
   computeKpis();
@@ -4310,6 +4438,7 @@ function renderAll() {
   computeKpis();
   renderNav();
   renderMain();
+  updateUndoButton();
   setTimeout(() => {
     document.querySelectorAll('textarea').forEach(ta => autoResize(ta));
   }, 0);
